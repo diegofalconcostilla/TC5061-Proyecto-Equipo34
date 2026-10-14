@@ -20,7 +20,7 @@ Pasos de ``ingest``:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import hashlib
 import json
 from pathlib import Path
@@ -148,7 +148,9 @@ def discover_urls() -> dict[str, str]:
     )
     response.raise_for_status()
     urls: dict[str, str] = {}
-    pattern = r'href="([^"]*/((?:datos_abiertos_\d{4}_\d{2}|nomenclatura_\d{4}_\d{2})[^"/]*\.csv))"'
+    pattern = (
+        r'href="([^"]*/((?:datos_abiertos_\d{4}_\d{2}|nomenclatura_\d{4}_\d{2})[^"/]*\.csv))"'
+    )
     for href, filename in re.findall(pattern, response.text):
         match = re.match(r"(datos_abiertos_\d{4}_\d{2}|nomenclatura_\d{4}_\d{2})", filename)
         key = f"{match.group(1)}.csv"
@@ -169,8 +171,7 @@ def download(url: str, dest: Path, force: bool = False) -> Path:
     ) as response:
         response.raise_for_status()
         with open(tmp, "wb") as fh:
-            for block in response.iter_content(CHUNK_BYTES):
-                fh.write(block)
+            fh.writelines(response.iter_content(CHUNK_BYTES))
     tmp.replace(dest)
     return dest
 
@@ -404,7 +405,7 @@ def ingest(
         "date_start": start,
         "date_end": end,
         "data_version": compute_data_version(entries),
-        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "totals": {
             "months": len(trip_entries),
             "trips_raw": sum(e["rows_raw"] for e in trip_entries),
