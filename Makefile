@@ -84,3 +84,38 @@ export PRINT_HELP_PYSCRIPT
 
 help:
 	@$(PYTHON_INTERPRETER) -c "${PRINT_HELP_PYSCRIPT}" < $(MAKEFILE_LIST)
+
+
+#################################################################################
+# PROJECT RULES                                                                 #
+#################################################################################
+
+
+## Descargar, limpiar y versionar los datos de MiBici
+.PHONY: data
+data:
+	$(PYTHON_INTERPRETER) -m mibici.dataset ingest
+
+## Verificar los datos locales contra data/manifest.json
+.PHONY: verify
+verify:
+	$(PYTHON_INTERPRETER) -m mibici.dataset verify
+
+## Construir los datasets de P1, P2 y P3
+.PHONY: features
+features:
+	$(PYTHON_INTERPRETER) -m mibici.features
+
+## Ejecutar el experimento base y registrarlo en MLflow
+.PHONY: train
+train:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.train
+
+## Abrir la interfaz de MLflow
+.PHONY: mlflow-ui
+mlflow-ui:
+	mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
+
+## Pipeline completo: datos -> features -> experimento
+.PHONY: all
+all: data features train
