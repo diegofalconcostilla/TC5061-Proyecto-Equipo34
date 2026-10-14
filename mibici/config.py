@@ -71,6 +71,32 @@ MAX_TRIP_MINUTES = 180  # viajes más largos se consideran anómalos
 PERSONAL_DATA_COLUMNS = ["usuario_id", "genero", "anio_nacimiento"]
 
 # ---------------------------------------------------------------------------
+# Formulación de las preguntas
+# ---------------------------------------------------------------------------
+# Datasets de modelado (Parquet en data/processed/).
+P1_DATASET_PATH = PROCESSED_DATA_DIR / "p1_station_day.parquet"
+P2_DATASET_PATH = PROCESSED_DATA_DIR / "p2_station_block.parquet"
+P3_DATASET_PATH = PROCESSED_DATA_DIR / "p3_station_profiles_train.parquet"
+P3_TEST_DATASET_PATH = PROCESSED_DATA_DIR / "p3_station_profiles_test.parquet"
+
+# P1 (regresión): viajes iniciados por estación y día, horizonte de 1 día.
+P1_LAGS_DAYS = [1, 2, 7, 14]
+P1_ROLLING_DAYS = [7, 28]
+
+# P2 (clasificación): bloques de 3 horas a partir de las 06:00, horizonte de 1 bloque.
+P2_BLOCK_HOURS = 3
+P2_FIRST_HOUR = 6
+P2_BLOCKS_PER_DAY = (24 - P2_FIRST_HOUR) // P2_BLOCK_HOURS
+# Riesgo: |llegadas - salidas| del bloque >= fracción de la capacidad de la estación.
+P2_RISK_CAPACITY_FRACTION = 0.5
+P2_ROLLING_WEEKS = 4
+
+# P3 (clustering): perfiles de uso calculados solo con el periodo de entrenamiento.
+P3_K_RANGE = list(range(3, 9))
+P3_MIN_DEPARTURES = 30  # estaciones con menos salidas en train tienen perfiles ruidosos
+P3_BASELINE_K = 6
+
+# ---------------------------------------------------------------------------
 # MLflow
 # ---------------------------------------------------------------------------
 TEAM = "equipo34"
