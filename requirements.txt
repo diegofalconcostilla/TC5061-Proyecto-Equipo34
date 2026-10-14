@@ -1,15 +1,31 @@
-ipython
-jupyterlab
-loguru
-matplotlib
-notebook
-numpy
-pandas
-pip
-pytest
-python-dotenv
-ruff
-scikit-learn
-tqdm
-typer
+# Python 3.12 - dependencias con versión fija
+# Datos y modelado
+numpy==2.5.3
+pandas==3.0.5
+pyarrow==25.0.1
+scikit-learn==1.9.1
+matplotlib==3.11.2
+requests==2.34.2
+
+# Seguimiento de experimentos
+mlflow==3.16.0
+
+# CLI y utilidades
+typer==0.27.3
+loguru==0.7.3
+tqdm==4.70.1
+python-dotenv==1.2.4
+
+# Exploración (notebooks)
+ipython==9.17.1
+jupyterlab==4.6.4
+notebook==7.6.3
+ipykernel==7.4.0
+nbconvert==7.17.2
+
+# Calidad
+pytest==9.1.1
+ruff==0.17.0
+pip==26.2.1
+
 -e .

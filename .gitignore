@@ -1,5 +1,28 @@
-# Data
-/data/
+# Data: ningún dato de MiBici se versiona; solo el manifiesto de versiones
+/data/*
+!/data/manifest.json
+*.csv
+*.parquet
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Modelos serializados
+/models/*
+!/models/.gitkeep
+*.pkl
+*.joblib
+*.skops
+*.onnx
+
+# Credenciales
+.env
+.env.*
+*.pem
+*.key
+credentials*.json
 
 # Mac OS-specific storage files
 .DS_Store
