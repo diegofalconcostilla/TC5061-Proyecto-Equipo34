@@ -63,15 +63,18 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 
 ## Instalación
 
-Requiere Python 3.12 y Git.
+Requiere Python 3.12 y Git. El paquete declara `requires-python = "~=3.12.0"`, así que el entorno debe crearse con Python 3.12 explícitamente: si `python` apunta a otra versión (por ejemplo 3.13 o 3.14), la instalación falla.
 
 ```bash
 git clone https://github.com/diegofalconcostilla/TC5061-Proyecto-Equipo34.git
 cd TC5061-Proyecto-Equipo34
-python -m venv .venv
+python3.12 -m venv .venv                # Windows: py -3.12 -m venv .venv
 # Windows: .venv\Scripts\activate      Linux/macOS: source .venv/bin/activate
+python --version                        # debe mostrar Python 3.12.x
 pip install -r requirements.txt         # instala también el paquete mibici en modo editable
 ```
+
+Si `pip install` termina con `ERROR: Package 'mibici' requires a different Python: X.Y.Z not in '~=3.12.0'`, el entorno se creó con otra versión de Python: borra `.venv` y vuelve a crearlo con Python 3.12.
 
 ## Reproducir el experimento
 
