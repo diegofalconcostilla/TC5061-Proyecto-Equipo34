@@ -92,16 +92,24 @@ Si la ingesta produce la misma `data_version` (`efa3a16661ec`), los datos son id
 
 ### Experimento base
 
-Experimento `mibici-equipo34`, un baseline y un candidato por pregunta. Métricas en prueba (mayo a agosto de 2026):
+Experimento `mibici-equipo34`: por pregunta, baselines sencillos, un modelo lineal (P1 y P2) y el candidato, para medir cuánto aporta cada nivel de complejidad. Métricas en prueba (mayo a agosto de 2026):
 
 | Pregunta | Run | Resultado |
 |---|---|---|
+| P1 | `p1-baseline-historico-estacion-dia-semana` | test_mae 8.11 · test_wape 0.298 · test_r2 0.711 |
+| P1 | `p1-baseline-media-movil-7d` | test_mae 7.14 · test_wape 0.262 · test_r2 0.838 |
 | P1 | `p1-baseline-naive-estacional-7d` | test_mae 7.12 · test_wape 0.261 · test_r2 0.794 |
+| P1 | `p1-poisson-lineal-lags-calendario` | test_mae 6.00 · test_wape 0.220 · test_r2 0.862 |
 | P1 | `p1-hgb-regressor-lags-calendario` | test_mae 5.30 · test_wape 0.194 · test_r2 0.893 |
+| P2 | `p2-baseline-tasa-historica-estacion-bloque` | test_pr_auc 0.320 · test_f1 0.346 · test_recall 0.400 |
 | P2 | `p2-baseline-persistencia-semanal` | test_pr_auc 0.387 · test_f1 0.350 · test_recall 0.351 |
+| P2 | `p2-logistica-flujos-lag` | test_pr_auc 0.405 · test_f1 0.415 · test_recall 0.450 |
 | P2 | `p2-hgb-classifier-flujos-lag` | test_pr_auc 0.464 · test_f1 0.449 · test_recall 0.448 |
 | P3 | `p3-baseline-kmeans-geografico` | train_profile_silhouette -0.014 (k = 6) |
+| P3 | `p3-baseline-regla-manana-tarde` | train_profile_silhouette 0.051 (3 grupos) · test_stability_ari 0.271 |
 | P3 | `p3-kmeans-perfiles-uso` | train_profile_silhouette 0.142 (k = 3) · test_stability_ari 0.446 |
+
+El baseline histórico de P1 es el mejor de los tres baselines en validación (MAE 7.42 frente a 7.91 y 8.27) y el peor en prueba: el promedio de 2024-2025 representa cada vez peor la demanda de 2026 (deriva). El ARI del baseline geográfico de P3 es 1.0 por construcción (las coordenadas no cambian entre periodos), por eso no se reporta como estabilidad.
 
 **Nota sobre P2:** los clasificadores se entrenan con `class_weight="balanced"`, así que su `predict_proba` no es una probabilidad calibrada: en prueba, la probabilidad media predicha por el candidato es 0.17, frente a una prevalencia real de riesgo de 0.025. El score sirve para ordenar estaciones por riesgo (PR-AUC, y F1 con el umbral elegido en validación), no para comunicar "X % de riesgo" (van den Goorbergh et al., 2022). Si se necesitan probabilidades, por ejemplo para decidir con costos, hay que calibrar con el periodo de validación o entrenar sin pesos.
 
