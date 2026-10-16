@@ -103,6 +103,8 @@ Experimento `mibici-equipo34`, un baseline y un candidato por pregunta. Métrica
 | P3 | `p3-baseline-kmeans-geografico` | train_profile_silhouette -0.014 (k = 6) |
 | P3 | `p3-kmeans-perfiles-uso` | train_profile_silhouette 0.142 (k = 3) · test_stability_ari 0.446 |
 
+**Nota sobre P2:** los clasificadores se entrenan con `class_weight="balanced"`, así que su `predict_proba` no es una probabilidad calibrada: en prueba, la probabilidad media predicha por el candidato es 0.17, frente a una prevalencia real de riesgo de 0.025. El score sirve para ordenar estaciones por riesgo (PR-AUC, y F1 con el umbral elegido en validación), no para comunicar "X % de riesgo" (van den Goorbergh et al., 2022). Si se necesitan probabilidades, por ejemplo para decidir con costos, hay que calibrar con el periodo de validación o entrenar sin pesos.
+
 ## Buenas prácticas aplicadas
 
 | Práctica | Cómo se aplica |
@@ -149,4 +151,5 @@ Seguimos **GitHub Flow**:
 - MiBici. (s.f.). *Datos abiertos* [Conjunto de datos]. Sistema de Bicicleta Pública del Área Metropolitana de Guadalajara. https://www.mibici.net/es/datos-abiertos/
 - MLflow. (s.f.). *MLflow Tracking* [Documentación]. https://mlflow.org/docs/latest/ml/tracking/
 - Treveil, M., Omont, N., Stenac, C., Lefevre, K., Phan, D., Zentici, J., Lavoillotte, A., Miyazaki, M., & Heidmann, L. (2020). *Introducing MLOps: How to scale machine learning in the enterprise*. O'Reilly Media.
+- van den Goorbergh, R., van Smeden, M., Timmerman, D., & Van Calster, B. (2022). The harm of class imbalance corrections for risk prediction models: Illustration and simulation using logistic regression. *Journal of the American Medical Informatics Association, 29*(9), 1525-1534. https://doi.org/10.1093/jamia/ocac093
 - Wilson, B. (2022). *Machine learning engineering in action*. Manning Publications.
