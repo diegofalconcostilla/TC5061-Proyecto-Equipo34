@@ -148,7 +148,7 @@ Seguimos **GitHub Flow**:
 | Integrante | Rol |
 |---|---|
 | Diego Falcón Costilla | Ingesta y versionado de datos, experimento base en MLflow |
-| _Integrante 2_ | _Por definir_ |
+| Oscar Elton | Modelos intermedios (antes de los boostings) y refactorización de código |
 | _Integrante 3_ | _Por definir_ |
 | Javier Alejandro García | Feature Engineering |
 
