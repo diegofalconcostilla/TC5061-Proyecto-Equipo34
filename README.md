@@ -63,15 +63,18 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 
 ## Instalación
 
-Requiere Python 3.12 y Git.
+Requiere Python 3.12 y Git. El paquete declara `requires-python = "~=3.12.0"`, así que el entorno debe crearse con Python 3.12 explícitamente: si `python` apunta a otra versión (por ejemplo 3.13 o 3.14), la instalación falla.
 
 ```bash
 git clone https://github.com/diegofalconcostilla/TC5061-Proyecto-Equipo34.git
 cd TC5061-Proyecto-Equipo34
-python -m venv .venv
+python3.12 -m venv .venv                # Windows: py -3.12 -m venv .venv
 # Windows: .venv\Scripts\activate      Linux/macOS: source .venv/bin/activate
+python --version                        # debe mostrar Python 3.12.x
 pip install -r requirements.txt         # instala también el paquete mibici en modo editable
 ```
+
+Si `pip install` termina con `ERROR: Package 'mibici' requires a different Python: X.Y.Z not in '~=3.12.0'`, el entorno se creó con otra versión de Python: borra `.venv` y vuelve a crearlo con Python 3.12.
 
 ## Reproducir el experimento
 
@@ -89,16 +92,26 @@ Si la ingesta produce la misma `data_version` (`efa3a16661ec`), los datos son id
 
 ### Experimento base
 
-Experimento `mibici-equipo34`, un baseline y un candidato por pregunta. Métricas en prueba (mayo a agosto de 2026):
+Experimento `mibici-equipo34`: por pregunta, baselines sencillos, un modelo lineal (P1 y P2) y el candidato, para medir cuánto aporta cada nivel de complejidad. Métricas en prueba (mayo a agosto de 2026):
 
 | Pregunta | Run | Resultado |
 |---|---|---|
+| P1 | `p1-baseline-historico-estacion-dia-semana` | test_mae 8.11 · test_wape 0.298 · test_r2 0.711 |
+| P1 | `p1-baseline-media-movil-7d` | test_mae 7.14 · test_wape 0.262 · test_r2 0.838 |
 | P1 | `p1-baseline-naive-estacional-7d` | test_mae 7.12 · test_wape 0.261 · test_r2 0.794 |
+| P1 | `p1-poisson-lineal-lags-calendario` | test_mae 6.00 · test_wape 0.220 · test_r2 0.862 |
 | P1 | `p1-hgb-regressor-lags-calendario` | test_mae 5.30 · test_wape 0.194 · test_r2 0.893 |
+| P2 | `p2-baseline-tasa-historica-estacion-bloque` | test_pr_auc 0.320 · test_f1 0.346 · test_recall 0.400 |
 | P2 | `p2-baseline-persistencia-semanal` | test_pr_auc 0.387 · test_f1 0.350 · test_recall 0.351 |
+| P2 | `p2-logistica-flujos-lag` | test_pr_auc 0.405 · test_f1 0.415 · test_recall 0.450 |
 | P2 | `p2-hgb-classifier-flujos-lag` | test_pr_auc 0.464 · test_f1 0.449 · test_recall 0.448 |
 | P3 | `p3-baseline-kmeans-geografico` | train_profile_silhouette -0.014 (k = 6) |
+| P3 | `p3-baseline-regla-manana-tarde` | train_profile_silhouette 0.051 (3 grupos) · test_stability_ari 0.271 |
 | P3 | `p3-kmeans-perfiles-uso` | train_profile_silhouette 0.142 (k = 3) · test_stability_ari 0.446 |
+
+El baseline histórico de P1 es el mejor de los tres baselines en validación (MAE 7.42 frente a 7.91 y 8.27) y el peor en prueba: el promedio de 2024-2025 representa cada vez peor la demanda de 2026 (deriva). El ARI del baseline geográfico de P3 es 1.0 por construcción (las coordenadas no cambian entre periodos), por eso no se reporta como estabilidad.
+
+**Nota sobre P2:** los clasificadores se entrenan con `class_weight="balanced"`, así que su `predict_proba` no es una probabilidad calibrada: en prueba, la probabilidad media predicha por el candidato es 0.17, frente a una prevalencia real de riesgo de 0.025. El score sirve para ordenar estaciones por riesgo (PR-AUC, y F1 con el umbral elegido en validación), no para comunicar "X % de riesgo" (van den Goorbergh et al., 2022). Si se necesitan probabilidades, por ejemplo para decidir con costos, hay que calibrar con el periodo de validación o entrenar sin pesos.
 
 ## Buenas prácticas aplicadas
 
@@ -146,4 +159,5 @@ Seguimos **GitHub Flow**:
 - MiBici. (s.f.). *Datos abiertos* [Conjunto de datos]. Sistema de Bicicleta Pública del Área Metropolitana de Guadalajara. https://www.mibici.net/es/datos-abiertos/
 - MLflow. (s.f.). *MLflow Tracking* [Documentación]. https://mlflow.org/docs/latest/ml/tracking/
 - Treveil, M., Omont, N., Stenac, C., Lefevre, K., Phan, D., Zentici, J., Lavoillotte, A., Miyazaki, M., & Heidmann, L. (2020). *Introducing MLOps: How to scale machine learning in the enterprise*. O'Reilly Media.
+- van den Goorbergh, R., van Smeden, M., Timmerman, D., & Van Calster, B. (2022). The harm of class imbalance corrections for risk prediction models: Illustration and simulation using logistic regression. *Journal of the American Medical Informatics Association, 29*(9), 1525-1534. https://doi.org/10.1093/jamia/ocac093
 - Wilson, B. (2022). *Machine learning engineering in action*. Manning Publications.

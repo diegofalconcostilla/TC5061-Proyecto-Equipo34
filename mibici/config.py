@@ -95,6 +95,10 @@ P2_ROLLING_WEEKS = 4
 P3_K_RANGE = list(range(3, 9))
 P3_MIN_DEPARTURES = 30  # estaciones con menos salidas en train tienen perfiles ruidosos
 P3_BASELINE_K = 6
+# Regla de mañana y tarde: fracción de las salidas pico de días hábiles que ocurren en la mañana.
+P3_RULE_MORNING_HOURS = range(6, 10)
+P3_RULE_EVENING_HOURS = range(16, 20)
+P3_RULE_THRESHOLDS = (0.4, 0.6)  # < 0.4 destino matutino, > 0.6 origen matutino, resto mixta
 
 # ---------------------------------------------------------------------------
 # MLflow
