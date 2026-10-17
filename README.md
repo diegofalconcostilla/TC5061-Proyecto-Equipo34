@@ -137,7 +137,7 @@ Seguimos **GitHub Flow**:
 | Diego Falcón Costilla | Ingesta y versionado de datos, experimento base en MLflow |
 | _Integrante 2_ | _Por definir_ |
 | _Integrante 3_ | _Por definir_ |
-| _Integrante 4_ | _Por definir_ |
+| Javier Alejandro García | Feature Engineering |
 
 ## Referencias
 
