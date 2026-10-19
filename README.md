@@ -82,7 +82,7 @@ Si `pip install` termina con `ERROR: Package 'mibici' requires a different Pytho
 python -m mibici.dataset ingest      # 1. descarga, limpia, guarda Parquet y escribe data/manifest.json (~5 min)
 python -m mibici.dataset verify      #    opcional: compara los archivos locales con el manifiesto
 python -m mibici.features            # 2. construye los datasets de P1, P2 y P3 (~30 s)
-python -m mibici.modeling.train      # 3. registra 6 runs en MLflow (~1 min)
+python -m mibici.modeling.train      # 3. registra 12 runs en MLflow
 mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000   # 4. http://127.0.0.1:5000
 ```
 
@@ -149,7 +149,7 @@ Seguimos **GitHub Flow**:
 |---|---|
 | Diego Falcón Costilla | Ingesta y versionado de datos, experimento base en MLflow |
 | Oscar Elton | Modelos intermedios (antes de los boostings) y refactorización de código |
-| _Integrante 3_ | _Por definir_ |
+| Mariana Favarony Avila | MLOps & Experiment Validation|
 | Javier Alejandro García | Feature Engineering |
 
 ## Referencias

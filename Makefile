@@ -54,19 +54,6 @@ create_environment:
 	@echo ">>> New virtualenv created. Activate with:\nworkon $(PROJECT_NAME)"
 	
 
-
-
-#################################################################################
-# PROJECT RULES                                                                 #
-#################################################################################
-
-
-## Make dataset
-.PHONY: data
-data: requirements
-	$(PYTHON_INTERPRETER) mibici/dataset.py
-
-
 #################################################################################
 # Self Documenting Commands                                                     #
 #################################################################################
