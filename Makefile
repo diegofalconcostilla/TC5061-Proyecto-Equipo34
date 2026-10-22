@@ -120,6 +120,16 @@ train:
 search:
 	$(MLFLOW_RUN) -e search -P question=$(Q) -P model=$(M) -P grid="$(G)" -P params="$(P)"
 
+## Registrar y asignar alias: make register Q=p1 [RUN="nombre del run"] [ALIAS=champion]
+.PHONY: register
+register:
+	$(MLFLOW_RUN) -e register -P question=$(Q) -P run_name="$(RUN)" -P alias=$(or $(ALIAS),champion)
+
+## Predecir test con el modelo registrado: make predict Q=p1 [ALIAS=champion]
+.PHONY: predict
+predict:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.predict --question $(Q) --alias $(or $(ALIAS),champion)
+
 ## Pipeline completo: datos -> features -> experimento
 .PHONY: all
 all: data features train

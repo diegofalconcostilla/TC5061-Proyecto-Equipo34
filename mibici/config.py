@@ -148,6 +148,19 @@ SELECTION_METRIC = {
     "p3": ("train_profile_silhouette", "max"),
 }
 
+# Model Registry: un modelo registrado por pregunta; la versión en uso lleva el alias champion.
+REGISTERED_MODEL_NAMES = {
+    "p1": "mibici-equipo34-p1-demanda",
+    "p2": "mibici-equipo34-p2-riesgo",
+    "p3": "mibici-equipo34-p3-grupos",
+}
+REGISTERED_MODEL_DESCRIPTIONS = {
+    "p1": "P1: viajes que salen de cada estación al día siguiente (regresión, estación-día).",
+    "p2": "P2: riesgo de desbalance de una estación en el siguiente bloque de 3 h "
+    "(clasificación binaria; predict devuelve la etiqueta con el umbral elegido en validación).",
+    "p3": "P3: grupo de uso de cada estación según su perfil horario (clustering).",
+}
+
 # ---------------------------------------------------------------------------
 # MLflow
 # ---------------------------------------------------------------------------

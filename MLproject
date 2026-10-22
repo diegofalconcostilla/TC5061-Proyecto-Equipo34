@@ -37,3 +37,14 @@ entry_points:
     command: >-
       python -m mibici.modeling.search --question {question} --model {model}
       --grid {grid} --params {params}
+
+  # Registra el modelo de un run en el Model Registry y le asigna el alias.
+  # run_name vacío = el mejor candidate/search con modelo según SELECTION_METRIC (validación).
+  register:
+    parameters:
+      question: {type: string}
+      run_name: {type: string, default: ""}
+      alias: {type: string, default: champion}
+    command: >-
+      python -m mibici.modeling.registry --question {question} --run-name {run_name}
+      --alias {alias}
