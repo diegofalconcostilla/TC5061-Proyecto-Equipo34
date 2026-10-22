@@ -102,6 +102,45 @@ P3_RULE_EVENING_HOURS = range(16, 20)
 P3_RULE_THRESHOLDS = (0.4, 0.6)  # < 0.4 destino matutino, > 0.6 origen matutino, resto mixta
 
 # ---------------------------------------------------------------------------
+# Hiperparámetros por defecto de cada modelo (se sobrescriben con -P params="k=v,...")
+# ---------------------------------------------------------------------------
+# La clave es el nombre del modelo en P1_MODELS, P2_MODELS o P3_MODELS. Los modelos sin
+# hiperparámetros (reglas y promedios) no aparecen aquí.
+P1_MODEL_PARAMS = {
+    "poisson": {"alpha": 1e-4, "max_iter": 1000},
+    "hgb": {
+        "loss": "poisson",
+        "learning_rate": 0.05,
+        "max_iter": 500,
+        "max_leaf_nodes": 63,
+        "min_samples_leaf": 50,
+        "l2_regularization": 1.0,
+        "early_stopping": True,
+        "validation_fraction": 0.1,
+        "n_iter_no_change": 30,
+    },
+}
+P2_MODEL_PARAMS = {
+    "logistica": {"C": 1.0, "class_weight": "balanced", "max_iter": 1000},
+    "hgb": {
+        "learning_rate": 0.05,
+        "max_iter": 400,
+        "max_leaf_nodes": 63,
+        "min_samples_leaf": 100,
+        "l2_regularization": 1.0,
+        "class_weight": "balanced",
+        "early_stopping": True,
+        "validation_fraction": 0.1,
+        "n_iter_no_change": 30,
+    },
+}
+P3_MODEL_PARAMS = {
+    "baseline": {"n_clusters": P3_BASELINE_K, "n_init": 20},
+    # n_clusters = 0: se elige k en P3_K_RANGE por silueta.
+    "kmeans": {"n_clusters": 0, "n_init": 20},
+}
+
+# ---------------------------------------------------------------------------
 # MLflow
 # ---------------------------------------------------------------------------
 TEAM = "equipo34"

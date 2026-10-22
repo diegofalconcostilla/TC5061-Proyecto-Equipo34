@@ -23,9 +23,9 @@ from sklearn.preprocessing import StandardScaler
 
 from mibici import plots
 from mibici.config import (
-    P3_BASELINE_K,
     P3_DATASET_PATH,
     P3_K_RANGE,
+    P3_MODEL_PARAMS,
     P3_RULE_EVENING_HOURS,
     P3_RULE_MORNING_HOURS,
     P3_RULE_THRESHOLDS,
@@ -33,6 +33,8 @@ from mibici.config import (
     SEED,
 )
 from mibici.features import p3_feature_columns
+from mibici.modeling.common import ModelSpec, get_spec, run_name_with_changes
+from mibici.modeling.params import resolve_params
 from mibici.modeling.tracking import common_params, log_figure, log_json, start_run
 
 
@@ -74,21 +76,25 @@ class P3Result(NamedTuple):
     k_curve: dict[int, float] | None = None  # silueta por k, si el modelo elige k
 
 
-def p3_geographic_kmeans(train: pd.DataFrame, x_profile: np.ndarray) -> P3Result:
-    cols, k = ["latitude", "longitude"], P3_BASELINE_K
-    model = make_pipeline(StandardScaler(), KMeans(k, n_init=20, random_state=SEED))
+def p3_geographic_kmeans(train: pd.DataFrame, x_profile: np.ndarray, hp: dict) -> P3Result:
+    cols, k = ["latitude", "longitude"], hp["n_clusters"]
+    model = make_pipeline(StandardScaler(), KMeans(k, n_init=hp["n_init"], random_state=SEED))
     labels = model.fit_predict(train[cols])
     return P3Result(
         "p3-baseline-kmeans-geografico",
         "P3 baseline: KMeans solo con latitud y longitud (zonas geográficas).",
-        {"model": "KMeans", "features": "latitude,longitude", "hp_n_clusters": k, "hp_n_init": 20},
+        {
+            "model_class": "KMeans",
+            "features": "latitude,longitude",
+            **{f"hp_{key}": v for key, v in hp.items()},
+        },
         labels,
         lambda df: model.predict(df[cols]),
         model[:-1].transform(train[cols]),
     )
 
 
-def p3_morning_evening_rule(train: pd.DataFrame, x_profile: np.ndarray) -> P3Result:
+def p3_morning_evening_rule(train: pd.DataFrame, x_profile: np.ndarray, hp: dict) -> P3Result:
     low, high = P3_RULE_THRESHOLDS
     morning, evening = P3_RULE_MORNING_HOURS, P3_RULE_EVENING_HOURS
     return P3Result(
@@ -96,7 +102,7 @@ def p3_morning_evening_rule(train: pd.DataFrame, x_profile: np.ndarray) -> P3Res
         "P3 baseline: regla fija por la fracción de salidas pico de días hábiles en la "
         "mañana; > 0.6 origen matutino, < 0.4 destino matutino, resto mixta.",
         {
-            "model": "MorningEveningRule",
+            "model_class": "MorningEveningRule",
             "features": "morning_share",
             "morning_hours": f"{morning.start:02d}:00-{morning.stop:02d}:00",
             "evening_hours": f"{evening.start:02d}:00-{evening.stop:02d}:00",
@@ -109,26 +115,33 @@ def p3_morning_evening_rule(train: pd.DataFrame, x_profile: np.ndarray) -> P3Res
     )
 
 
-def p3_profile_kmeans(train: pd.DataFrame, x_profile: np.ndarray) -> P3Result:
-    cols = p3_feature_columns(train)
-    k_curve = {}
-    for k in P3_K_RANGE:
-        km = KMeans(k, n_init=20, random_state=SEED).fit(x_profile)
-        k_curve[k] = silhouette_score(x_profile, km.labels_, random_state=SEED)
-    k = max(k_curve, key=k_curve.get)
-    model = make_pipeline(StandardScaler(), KMeans(k, n_init=20, random_state=SEED))
+def p3_profile_kmeans(train: pd.DataFrame, x_profile: np.ndarray, hp: dict) -> P3Result:
+    """KMeans sobre perfiles de uso; con ``n_clusters = 0`` elige k en P3_K_RANGE por silueta."""
+    cols, n_init = p3_feature_columns(train), hp["n_init"]
+    k_curve = None
+    if hp["n_clusters"] == 0:
+        k_curve = {}
+        for k in P3_K_RANGE:
+            km = KMeans(k, n_init=n_init, random_state=SEED).fit(x_profile)
+            k_curve[k] = silhouette_score(x_profile, km.labels_, random_state=SEED)
+        k = max(k_curve, key=k_curve.get)
+        k_params = {"hp_k_range": f"{min(P3_K_RANGE)}-{max(P3_K_RANGE)}"}
+        description = "k elegido por silueta"
+    else:
+        k, k_params, description = hp["n_clusters"], {}, f"k fijo = {hp['n_clusters']}"
+    model = make_pipeline(StandardScaler(), KMeans(k, n_init=n_init, random_state=SEED))
     labels = model.fit_predict(train[cols])
     return P3Result(
         "p3-kmeans-perfiles-uso",
         "P3 candidato: KMeans sobre perfiles horarios de uso, volumen y balance "
-        "de flujos; k elegido por silueta.",
+        f"de flujos; {description}.",
         {
-            "model": "KMeans",
+            "model_class": "KMeans",
             "features": "perfil_horario_48+volumen+balance+duracion",
             "n_features": len(cols),
             "hp_n_clusters": k,
-            "hp_k_range": f"{min(P3_K_RANGE)}-{max(P3_K_RANGE)}",
-            "hp_n_init": 20,
+            **k_params,
+            "hp_n_init": n_init,
         },
         labels,
         lambda df: model.predict(df[cols]),
@@ -137,14 +150,16 @@ def p3_profile_kmeans(train: pd.DataFrame, x_profile: np.ndarray) -> P3Result:
     )
 
 
-P3_MODELS: dict[str, Callable[[pd.DataFrame, np.ndarray], P3Result]] = {
-    "baseline": p3_geographic_kmeans,
-    "regla": p3_morning_evening_rule,
-    "candidate": p3_profile_kmeans,
+P3_MODELS: dict[str, ModelSpec] = {
+    "baseline": ModelSpec(p3_geographic_kmeans, "kmeans", "baseline", P3_MODEL_PARAMS["baseline"]),
+    "regla": ModelSpec(p3_morning_evening_rule, "rule", "baseline"),
+    "kmeans": ModelSpec(p3_profile_kmeans, "kmeans", "candidate", P3_MODEL_PARAMS["kmeans"]),
 }
 
 
-def run_p3(role: str) -> None:
+def run_p3(role: str, params: str = "", stage: str = "") -> None:
+    spec = get_spec(P3_MODELS, "p3", role)
+    hp = resolve_params(spec.defaults, params)
     train = pd.read_parquet(P3_DATASET_PATH)
     test = pd.read_parquet(P3_TEST_DATASET_PATH)
     profile_cols = p3_feature_columns(train)
@@ -152,11 +167,12 @@ def run_p3(role: str) -> None:
     scaler = StandardScaler().fit(train[profile_cols])
     x_profile = scaler.transform(train[profile_cols])
 
-    params = common_params("estacion", "perfil del periodo de entrenamiento")
-    params |= {"n_stations_train": len(train), "n_stations_test": len(test)}
-    result = P3_MODELS[role](train, x_profile)
-    params |= result.params
-    run_name, labels, k_curve = result.run_name, result.labels, result.k_curve
+    run_params = common_params("p3", role, "estacion", "perfil del periodo de entrenamiento")
+    run_params |= {"n_stations_train": len(train), "n_stations_test": len(test)}
+    result = spec.fit(train, x_profile, hp)
+    run_params |= result.params
+    labels, k_curve = result.labels, result.k_curve
+    run_name = run_name_with_changes(result.run_name, hp, spec.defaults)
     k = len(np.unique(labels))
     extra_metrics = {f"train_silhouette_k{kk}": v for kk, v in (k_curve or {}).items()}
 
@@ -165,8 +181,8 @@ def run_p3(role: str) -> None:
     common = train[["station_id"]].assign(label_train=labels).merge(test, on="station_id")
     stability = adjusted_rand_score(common["label_train"], result.assign(common))
 
-    with start_run("P3", role, run_name, result.description):
-        mlflow.log_params(params)
+    with start_run("P3", role, spec.family, stage or spec.stage, run_name, result.description):
+        mlflow.log_params(run_params)
         metrics = cluster_metrics(x_profile, labels, "train_profile")
         metrics |= cluster_metrics(result.x_own, labels, "train_own")
         metrics["test_stability_ari"] = stability

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import NamedTuple
 
 import numpy as np
@@ -13,6 +14,33 @@ from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardSc
 
 def split_frames(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
     return {s: df[df["split"] == s] for s in ("train", "valid", "test")}
+
+
+class ModelSpec(NamedTuple):
+    """Entrada de la tabla de modelos de una pregunta (``P1_MODELS``, etc.).
+
+    ``fit`` recibe los datos de la pregunta y los hiperparámetros ya resueltos (defaults de
+    ``config.py`` más los cambios de ``-P params``). ``family`` y ``stage`` se registran como
+    etiquetas ``model_family`` y ``stage_of_work``.
+    """
+
+    fit: Callable
+    family: str
+    stage: str
+    defaults: dict | None = None
+
+
+def get_spec(models: dict[str, ModelSpec], question: str, role: str) -> ModelSpec:
+    if role not in models:
+        raise ValueError(f"{question} no tiene el modelo {role!r}; opciones: {', '.join(models)}")
+    spec = models[role]
+    return spec._replace(defaults=dict(spec.defaults or {}))
+
+
+def run_name_with_changes(run_name: str, hp: dict, defaults: dict) -> str:
+    """Agrega al nombre del run los hiperparámetros que difieren del default."""
+    changes = [f"{k}={v}" for k, v in hp.items() if defaults.get(k) != v]
+    return f"{run_name}[{','.join(changes)}]" if changes else run_name
 
 
 class ModelResult(NamedTuple):

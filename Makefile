@@ -110,10 +110,10 @@ verify:
 features:
 	$(PYTHON_INTERPRETER) -m mibici.features
 
-## Ejecutar el experimento base y registrarlo en MLflow
+## Entrenar un modelo con mlflow run: make train Q=p1 M=hgb P="learning_rate=0.1"
 .PHONY: train
 train:
-	$(PYTHON_INTERPRETER) -m mibici.modeling.train
+	$(MLFLOW_RUN) -e train -P question=$(Q) -P model=$(M) -P params="$(P)"
 
 ## Pipeline completo: datos -> features -> experimento
 .PHONY: all

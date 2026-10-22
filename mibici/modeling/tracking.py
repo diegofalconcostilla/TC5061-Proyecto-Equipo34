@@ -50,9 +50,15 @@ def setup_mlflow() -> None:
     mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
 
-def common_params(granularity: str, horizon: str) -> dict:
-    """Parámetros de reproducibilidad compartidos por todos los runs."""
+def common_params(question: str, role: str, granularity: str, horizon: str) -> dict:
+    """Parámetros de reproducibilidad compartidos por todos los runs.
+
+    ``question`` y ``model`` coinciden con los que ``mlflow run`` registra del MLproject, para
+    que los runs lanzados con ``python -m`` tengan los mismos parámetros.
+    """
     return {
+        "question": question,
+        "model": role,
         "date_start": DATE_START,
         "date_end": DATE_END,
         "data_version": get_data_version(),
@@ -64,16 +70,39 @@ def common_params(granularity: str, horizon: str) -> dict:
     }
 
 
-def start_run(question: str, role: str, run_name: str, description: str):
-    """Abre un run con nombre descriptivo y las etiquetas obligatorias."""
+STAGES = ("baseline", "search", "candidate")
+
+
+def start_run(
+    question: str,
+    role: str,
+    family: str,
+    stage: str,
+    run_name: str,
+    description: str,
+    nested: bool = False,
+):
+    """Abre un run con nombre descriptivo y las etiquetas para filtrar en la interfaz.
+
+    Bajo ``mlflow run`` el run ya existe (``MLFLOW_RUN_ID``) y ``start_run`` lo retoma ignorando
+    ``run_name`` y ``tags``; por eso se fijan después con ``set_tags``.
+    """
+    if stage not in STAGES:
+        raise ValueError(f"stage_of_work debe ser uno de {STAGES}, no {stage!r}")
     tags = {
         "team": TEAM,
         "question": question,
         "model_role": role,
+        "model_family": family,
+        "stage_of_work": stage,
+        "data_version": get_data_version(),
+        "mlflow.runName": run_name,
         "mlflow.note.content": description,
         **git_info(),
     }
-    return mlflow.start_run(run_name=run_name, tags=tags)
+    run = mlflow.start_run(run_name=run_name, nested=nested)
+    mlflow.set_tags(tags)
+    return run
 
 
 def log_json(data: dict, name: str) -> None:

@@ -1,66 +1,51 @@
-"""Experimento base del proyecto MiBici registrado en MLflow Tracking.
+"""Entrena un modelo de P1, P2 o P3 y lo registra en el experimento de MLflow.
 
-Uso desde la terminal:
+Se lanza desde el MLflow Project (un run por invocación):
 
-    python -m mibici.modeling.train                         # todos los modelos de P1-P3
-    python -m mibici.modeling.train --question p2 --model candidate
-    python -m mibici.modeling.train --question p1 --model poisson
+    mlflow run . -e train -P question=p1 -P model=hgb
+    mlflow run . -e train -P question=p1 -P model=hgb -P params="learning_rate=0.1,max_iter=300"
 
-Cada pregunta tiene una tabla de modelos (``P1_MODELS``, ``P2_MODELS``, ``P3_MODELS``): de
-baselines sencillos (reglas, promedios, KMeans geográfico) a modelos lineales y a los candidatos,
-para medir cuánto aporta cada nivel de complejidad.
+o, durante el desarrollo, directamente:
 
-Cada run registra los parámetros necesarios para reproducirlo (rango de fechas, versión de los
-datos, cortes de partición, semilla, modelo e hiperparámetros), métricas con prefijo del
-conjunto en que se calculan (``valid_``, ``test_``, ``train_``), al menos un artefacto y
-etiquetas de equipo, pregunta y commit de Git. No se registran datos personales.
+    python -m mibici.modeling.train --question p2 --model logistica --params "C=0.5"
+
+Cada pregunta tiene su tabla de modelos (``P1_MODELS`` en ``p1.py``, etc.) y los
+hiperparámetros por defecto viven en ``config.py`` (``P1_MODEL_PARAMS``, etc.).
 """
 
 from __future__ import annotations
 
-from loguru import logger
 import typer
 
 from mibici.modeling.p1 import P1_MODELS, run_p1
 from mibici.modeling.p2 import P2_MODELS, run_p2
 from mibici.modeling.p3 import P3_MODELS, run_p3
-from mibici.modeling.tracking import setup_mlflow
+from mibici.modeling.tracking import STAGES, setup_mlflow
 
-app = typer.Typer(help="Experimento base de MiBici con MLflow Tracking.")
-
+app = typer.Typer(help="Entrena un modelo de MiBici y lo registra en MLflow.")
 
 RUNNERS = {"p1": run_p1, "p2": run_p2, "p3": run_p3}
-ROLES = {"p1": list(P1_MODELS), "p2": list(P2_MODELS), "p3": list(P3_MODELS)}
+MODELS = {"p1": P1_MODELS, "p2": P2_MODELS, "p3": P3_MODELS}
 
 
 @app.command()
 def main(
-    question: str = typer.Option("all", help="p1, p2, p3 o all."),
+    question: str = typer.Option(..., help="p1, p2 o p3."),
     model: str = typer.Option(
-        "all",
-        help="Modelo a correr o all. P1: "
-        + ", ".join(ROLES["p1"])
-        + ". P2: "
-        + ", ".join(ROLES["p2"])
-        + ". P3: "
-        + ", ".join(ROLES["p3"])
-        + ".",
+        "baseline",
+        help="; ".join(f"{q.upper()}: {', '.join(models)}" for q, models in MODELS.items()),
+    ),
+    params: str = typer.Option("", help='Cambios a los defaults de config.py: "k=v,k2=v2".'),
+    stage: str = typer.Option(
+        "", help=f"stage_of_work ({', '.join(STAGES)}); por defecto, el del modelo."
     ),
 ):
-    """Entrena y registra en MLflow los modelos del experimento base."""
-    questions = list(RUNNERS) if question == "all" else [question.lower()]
+    """Entrena un modelo y registra parámetros, métricas y artefactos en un run."""
+    question = question.lower()
+    if question not in RUNNERS:
+        raise typer.BadParameter(f"question debe ser p1, p2 o p3, no {question!r}")
     setup_mlflow()
-    for q in questions:
-        if model != "all" and model not in ROLES[q]:
-            if question == "all":
-                continue
-            raise typer.BadParameter(
-                f"{q} no tiene el modelo {model!r}; opciones: {', '.join(ROLES[q])}"
-            )
-        roles = ROLES[q] if model == "all" else [model]
-        for role in roles:
-            logger.info(f"Ejecutando {q.upper()} - {role}")
-            RUNNERS[q](role)
+    RUNNERS[question](model, params, stage)
 
 
 if __name__ == "__main__":

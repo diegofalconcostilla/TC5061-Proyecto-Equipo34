@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from loguru import logger
 import mlflow
 import numpy as np
@@ -24,10 +22,19 @@ from mibici import plots
 from mibici.config import (
     P2_BLOCK_HOURS,
     P2_DATASET_PATH,
+    P2_MODEL_PARAMS,
     P2_RISK_CAPACITY_FRACTION,
     SEED,
 )
-from mibici.modeling.common import ModelResult, linear_preprocessor, split_frames
+from mibici.modeling.common import (
+    ModelResult,
+    ModelSpec,
+    get_spec,
+    linear_preprocessor,
+    run_name_with_changes,
+    split_frames,
+)
+from mibici.modeling.params import resolve_params
 from mibici.modeling.tracking import common_params, log_figure, log_json, start_run
 
 P2_FEATURES = [
@@ -80,7 +87,7 @@ def threshold_on_valid(
     return decision, {s: (scores[s] >= decision).astype(int) for s in ("valid", "test")}
 
 
-def p2_weekly_persistence(parts: dict[str, pd.DataFrame]) -> ModelResult:
+def p2_weekly_persistence(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
     scores = {
         s: parts[s]["abs_net_flow_same_block_4w_mean"]
         / np.ceil(P2_RISK_CAPACITY_FRACTION * parts[s]["capacity"].astype(float))
@@ -90,13 +97,13 @@ def p2_weekly_persistence(parts: dict[str, pd.DataFrame]) -> ModelResult:
         "p2-baseline-persistencia-semanal",
         "P2 baseline: riesgo si el mismo bloque de la semana anterior estuvo en "
         "riesgo; score = |flujo neto| medio del bloque en 4 semanas / umbral.",
-        {"model": "WeeklyPersistence", "label_rule": "risk_lag42"},
+        {"model_class": "WeeklyPersistence", "label_rule": "risk_lag42"},
         scores,
         {s: parts[s]["risk_lag42"].astype(int) for s in ("valid", "test")},
     )
 
 
-def p2_historical_rate(parts: dict[str, pd.DataFrame]) -> ModelResult:
+def p2_historical_rate(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
     """Frecuencia de riesgo en train por estación, bloque y tipo de día.
 
     Las estaciones sin historia en train usan la frecuencia de todo el sistema en ese bloque y
@@ -116,7 +123,7 @@ def p2_historical_rate(parts: dict[str, pd.DataFrame]) -> ModelResult:
         "P2 baseline: frecuencia de riesgo en train de la estación en ese bloque y tipo de "
         "día; umbral elegido en validación maximizando F1.",
         {
-            "model": "HistoricalRiskRate",
+            "model_class": "HistoricalRiskRate",
             "rate_keys": ",".join(keys),
             "fit_period": "train",
             "fallback": "tasa del sistema por bloque y tipo de dia",
@@ -129,8 +136,7 @@ def p2_historical_rate(parts: dict[str, pd.DataFrame]) -> ModelResult:
     )
 
 
-def p2_logistic(parts: dict[str, pd.DataFrame]) -> ModelResult:
-    hp = {"C": 1.0, "class_weight": "balanced", "max_iter": 1000}
+def p2_logistic(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
     numeric = [c for c in P2_FEATURES if c not in P2_CATEGORICAL]
     model = make_pipeline(
         linear_preprocessor(P2_CATEGORICAL, numeric), LogisticRegression(random_state=SEED, **hp)
@@ -143,7 +149,7 @@ def p2_logistic(parts: dict[str, pd.DataFrame]) -> ModelResult:
         "P2 modelo lineal: regresión logística balanceada con las variables del candidato "
         "(bloque y calendario en one-hot); umbral elegido en validación maximizando F1.",
         {
-            "model": "LogisticRegression",
+            "model_class": "LogisticRegression",
             "features": ",".join(P2_FEATURES),
             "encoding": f"onehot({','.join(P2_CATEGORICAL)})+standard",
             **{f"hp_{k}": v for k, v in hp.items()},
@@ -155,18 +161,7 @@ def p2_logistic(parts: dict[str, pd.DataFrame]) -> ModelResult:
     )
 
 
-def p2_hgb_candidate(parts: dict[str, pd.DataFrame]) -> ModelResult:
-    hp = {
-        "learning_rate": 0.05,
-        "max_iter": 400,
-        "max_leaf_nodes": 63,
-        "min_samples_leaf": 100,
-        "l2_regularization": 1.0,
-        "class_weight": "balanced",
-        "early_stopping": True,
-        "validation_fraction": 0.1,
-        "n_iter_no_change": 30,
-    }
+def p2_hgb(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
     model = HistGradientBoostingClassifier(random_state=SEED, **hp)
     model.fit(parts["train"][P2_FEATURES], parts["train"]["risk"])
     scores = {s: model.predict_proba(parts[s][P2_FEATURES])[:, 1] for s in ("valid", "test")}
@@ -176,7 +171,7 @@ def p2_hgb_candidate(parts: dict[str, pd.DataFrame]) -> ModelResult:
         "P2 candidato: HistGradientBoostingClassifier balanceado; umbral elegido "
         "en validación maximizando F1.",
         {
-            "model": "HistGradientBoostingClassifier",
+            "model_class": "HistGradientBoostingClassifier",
             "features": ",".join(P2_FEATURES),
             **{f"hp_{k}": v for k, v in hp.items()},
             "hp_n_iter_fitted": model.n_iter_,
@@ -187,32 +182,34 @@ def p2_hgb_candidate(parts: dict[str, pd.DataFrame]) -> ModelResult:
     )
 
 
-P2_MODELS: dict[str, Callable[[dict[str, pd.DataFrame]], ModelResult]] = {
-    "baseline": p2_weekly_persistence,
-    "tasa": p2_historical_rate,
-    "logistica": p2_logistic,
-    "candidate": p2_hgb_candidate,
+P2_MODELS: dict[str, ModelSpec] = {
+    "baseline": ModelSpec(p2_weekly_persistence, "naive", "baseline"),
+    "tasa": ModelSpec(p2_historical_rate, "historical", "baseline"),
+    "logistica": ModelSpec(p2_logistic, "linear", "candidate", P2_MODEL_PARAMS["logistica"]),
+    "hgb": ModelSpec(p2_hgb, "boosting", "candidate", P2_MODEL_PARAMS["hgb"]),
 }
 
 
-def run_p2(role: str) -> None:
+def run_p2(role: str, params: str = "", stage: str = "") -> None:
+    spec = get_spec(P2_MODELS, "p2", role)
+    hp = resolve_params(spec.defaults, params)
     df = pd.read_parquet(P2_DATASET_PATH)
     parts = split_frames(df)
-    params = common_params(f"estacion-bloque {P2_BLOCK_HOURS}h", "1 bloque (3 h)")
-    params |= {
+    run_params = common_params("p2", role, f"estacion-bloque {P2_BLOCK_HOURS}h", "1 bloque (3 h)")
+    run_params |= {
         "target": "risk",
         "risk_capacity_fraction": P2_RISK_CAPACITY_FRACTION,
         "n_train": len(parts["train"]),
         "n_valid": len(parts["valid"]),
         "n_test": len(parts["test"]),
     }
-    result = P2_MODELS[role](parts)
-    params |= result.params
-    run_name, scores, labels = result.run_name, result.scores, result.labels
-    description = result.description
+    result = spec.fit(parts, hp)
+    run_params |= result.params
+    scores, labels = result.scores, result.labels
+    run_name = run_name_with_changes(result.run_name, hp, spec.defaults)
 
-    with start_run("P2", role, run_name, description):
-        mlflow.log_params(params)
+    with start_run("P2", role, spec.family, stage or spec.stage, run_name, result.description):
+        mlflow.log_params(run_params)
         metrics = {}
         for s in ("valid", "test"):
             metrics |= classification_metrics(parts[s]["risk"], scores[s], labels[s], s)

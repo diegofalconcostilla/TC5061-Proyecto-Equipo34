@@ -8,3 +8,17 @@ entry_points:
   # Descarga, limpia y versiona los viajes (data/manifest.json) y construye los datasets de P1-P3.
   ingest:
     command: "python -m mibici.dataset ingest && python -m mibici.features"
+
+  # Entrena un modelo de la tabla de su pregunta (P1_MODELS, P2_MODELS o P3_MODELS).
+  # params cambia los hiperparámetros por defecto de config.py: "learning_rate=0.1,max_iter=300".
+  # stage vacío = stage_of_work por defecto del modelo (baseline o candidate).
+  train:
+    parameters:
+      question: {type: string, default: p1}
+      model: {type: string, default: baseline}
+      params: {type: string, default: ""}
+      stage: {type: string, default: ""}
+    # MLflow ya entrecomilla cada valor (shlex.quote); no agregar comillas aquí.
+    command: >-
+      python -m mibici.modeling.train --question {question} --model {model}
+      --params {params} --stage {stage}
