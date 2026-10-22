@@ -1,0 +1,10 @@
+name: mibici-equipo34
+
+# Entorno: Python 3.12 con las versiones fijas de requirements.txt.
+python_env: python_env.yaml
+
+# Rutas, fechas, cortes y semilla viven en mibici/config.py; no se repiten aquí.
+entry_points:
+  # Descarga, limpia y versiona los viajes (data/manifest.json) y construye los datasets de P1-P3.
+  ingest:
+    command: "python -m mibici.dataset ingest && python -m mibici.features"

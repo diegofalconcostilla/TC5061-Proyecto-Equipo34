@@ -56,7 +56,6 @@ from mibici import plots
 from mibici.config import (
     DATE_END,
     DATE_START,
-    MLFLOW_ARTIFACTS_DIR,
     MLFLOW_EXPERIMENT_NAME,
     MLFLOW_TRACKING_URI,
     P1_DATASET_PATH,
@@ -141,14 +140,11 @@ def git_info() -> dict[str, str]:
 
 
 def setup_mlflow() -> None:
-    """Configura el tracking local (SQLite) y el experimento único del proyecto."""
+    """Apunta al servidor de tracking y al experimento único del proyecto."""
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     if mlflow.get_experiment_by_name(MLFLOW_EXPERIMENT_NAME) is None:
-        MLFLOW_ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
         mlflow.create_experiment(
-            MLFLOW_EXPERIMENT_NAME,
-            artifact_location=MLFLOW_ARTIFACTS_DIR.as_uri(),
-            tags={"team": TEAM, "project": "MiBici TC5061"},
+            MLFLOW_EXPERIMENT_NAME, tags={"team": TEAM, "project": "MiBici TC5061"}
         )
     mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 

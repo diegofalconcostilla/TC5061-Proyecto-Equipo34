@@ -6,6 +6,13 @@ PROJECT_NAME = TC5061-Proyecto-Equipo34
 PYTHON_VERSION = 3.12
 PYTHON_INTERPRETER = python
 
+# MLflow: el puerto 5000 lo ocupa AirPlay en macOS.
+MLFLOW_PORT ?= 5001
+export MLFLOW_TRACKING_URI ?= http://127.0.0.1:$(MLFLOW_PORT)
+# Entorno de mlflow run: uv (aislado, desde python_env.yaml) o local (el entorno activo).
+ENV_MANAGER ?= uv
+MLFLOW_RUN = mlflow run . --env-manager $(ENV_MANAGER) --experiment-name mibici-equipo34
+
 #################################################################################
 # COMMANDS                                                                      #
 #################################################################################
@@ -78,7 +85,17 @@ help:
 #################################################################################
 
 
-## Descargar, limpiar y versionar los datos de MiBici
+## Levantar el servidor de tracking (SQLite + artefactos en ./mlartifacts)
+.PHONY: mlflow-server
+mlflow-server:
+	mlflow server --backend-store-uri sqlite:///mlflow.db --port $(MLFLOW_PORT)
+
+## Ingesta y features desde el MLflow Project
+.PHONY: ingest
+ingest:
+	$(MLFLOW_RUN) -e ingest
+
+## (desarrollo) Descargar, limpiar y versionar los datos sin mlflow run
 .PHONY: data
 data:
 	$(PYTHON_INTERPRETER) -m mibici.dataset ingest
@@ -88,7 +105,7 @@ data:
 verify:
 	$(PYTHON_INTERPRETER) -m mibici.dataset verify
 
-## Construir los datasets de P1, P2 y P3
+## (desarrollo) Construir los datasets de P1, P2 y P3 sin mlflow run
 .PHONY: features
 features:
 	$(PYTHON_INTERPRETER) -m mibici.features
@@ -97,11 +114,6 @@ features:
 .PHONY: train
 train:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.train
-
-## Abrir la interfaz de MLflow
-.PHONY: mlflow-ui
-mlflow-ui:
-	mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
 
 ## Pipeline completo: datos -> features -> experimento
 .PHONY: all

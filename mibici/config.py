@@ -4,6 +4,7 @@ Todas las rutas, fechas, semillas y parámetros compartidos viven aquí. Ningún
 módulo define rutas, fechas ni semillas por su cuenta.
 """
 
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -105,8 +106,9 @@ P3_RULE_THRESHOLDS = (0.4, 0.6)  # < 0.4 destino matutino, > 0.6 origen matutino
 # ---------------------------------------------------------------------------
 TEAM = "equipo34"
 MLFLOW_EXPERIMENT_NAME = f"mibici-{TEAM}"
-MLFLOW_TRACKING_URI = f"sqlite:///{(PROJ_ROOT / 'mlflow.db').as_posix()}"
-MLFLOW_ARTIFACTS_DIR = PROJ_ROOT / "mlartifacts"
+# Servidor local: mlflow server --backend-store-uri sqlite:///mlflow.db --port 5001
+# (el puerto 5000 lo ocupa AirPlay en macOS). mlflow run exporta esta variable al proceso.
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
 
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135
