@@ -11,22 +11,19 @@ import itertools
 
 def _convert(key: str, text: str, default):
     text = text.strip()
-    if text.lower() in ("none", "null"):
+    if text.lower() == "none":
         return None
     if isinstance(default, bool):
-        if text.lower() in ("true", "1", "yes"):
-            return True
-        if text.lower() in ("false", "0", "no"):
-            return False
-        raise ValueError(f"{key} espera true o false, no {text!r}")
-    if isinstance(default, (int, float)) or default is None:
+        if text.lower() not in ("true", "false"):
+            raise ValueError(f"{key} espera true o false, no {text!r}")
+        return text.lower() == "true"
+    if isinstance(default, (int, float)):
         for cast in (int, float):
             try:
                 return cast(text)
             except ValueError:
                 pass
-        if default is not None:
-            raise ValueError(f"{key} espera un número, no {text!r}")
+        raise ValueError(f"{key} espera un número, no {text!r}")
     return text
 
 

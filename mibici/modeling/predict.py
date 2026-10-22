@@ -25,18 +25,14 @@ from mibici.modeling.tracking import setup_mlflow
 
 app = typer.Typer(help="Predicciones de test con el modelo registrado bajo un alias.")
 
+TEST_PATHS = {"p1": P1_DATASET_PATH, "p2": P2_DATASET_PATH, "p3": P3_TEST_DATASET_PATH}
 # Columnas que identifican cada fila en el archivo de predicciones.
-TEST_DATA = {
-    "p1": (P1_DATASET_PATH, ["station_id", "date"]),
-    "p2": (P2_DATASET_PATH, ["station_id", "block_ts"]),
-    "p3": (P3_TEST_DATASET_PATH, ["station_id"]),
-}
+ID_COLUMNS = {"p1": ["station_id", "date"], "p2": ["station_id", "block_ts"], "p3": ["station_id"]}
 
 
 def load_test(question: str) -> pd.DataFrame:
-    path, _ = TEST_DATA[question]
-    df = pd.read_parquet(path)
-    return df[df["split"] == "test"] if "split" in df else df
+    df = pd.read_parquet(TEST_PATHS[question])
+    return df[df["split"] == "test"] if "split" in df else df  # P3 ya es un archivo de test
 
 
 @app.command()
@@ -53,13 +49,10 @@ def main(
     model = mlflow.pyfunc.load_model(uri)
     features = model.metadata.get_input_schema().input_names()
     test = load_test(question)
-    _, keys = TEST_DATA[question]
-    out = test[keys].assign(prediction=model.predict(test[features]))
+    out = test[ID_COLUMNS[question]].assign(prediction=model.predict(test[features]))
     path = PROCESSED_DATA_DIR / f"predictions_{question}_{alias}.csv"
     out.to_csv(path, index=False)
-    logger.success(
-        f"{uri}: {len(out)} predicciones en {path.relative_to(PROCESSED_DATA_DIR.parents[1])}"
-    )
+    logger.success(f"{uri}: {len(out)} predicciones en {path.name}")
 
 
 if __name__ == "__main__":

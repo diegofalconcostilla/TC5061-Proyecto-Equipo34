@@ -57,12 +57,13 @@ def log_data(train: pd.DataFrame, question: str, source: Path, target: str | Non
     si cambia el feature engineering con los mismos datos crudos.
     """
     mlflow.log_artifact(str(DATA_MANIFEST_PATH), artifact_path="data")
+    relpath = source.relative_to(PROJ_ROOT).as_posix()
     data_hash = content_hash(train)
     mlflow.log_param("train_data_hash", data_hash)
     log_json(
         {
             "question": question,
-            "source": source.relative_to(PROJ_ROOT).as_posix(),
+            "source": relpath,
             "rows": len(train),
             "columns": list(train.columns),
             "content_hash": data_hash,
@@ -72,7 +73,7 @@ def log_data(train: pd.DataFrame, question: str, source: Path, target: str | Non
     )
     dataset = mlflow.data.from_pandas(
         train,
-        source=source.relative_to(PROJ_ROOT).as_posix(),
+        source=relpath,
         name=f"{question}-train",
         targets=target,
     )

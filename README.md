@@ -71,7 +71,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
         ├── tracking.py    <- servidor, experimento, parámetros comunes y etiquetas
         ├── artifacts.py   <- modelo con firma, datos, gráficas y configuración por subcarpeta
         ├── params.py      <- hiperparámetros desde -P params y mallas de búsqueda
-        ├── common.py, wrappers.py, log_ingest.py
+        ├── common.py, log_ingest.py
 ```
 
 ## Instalación

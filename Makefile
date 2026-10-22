@@ -11,6 +11,7 @@ MLFLOW_PORT ?= 5001
 export MLFLOW_TRACKING_URI ?= http://127.0.0.1:$(MLFLOW_PORT)
 # Entorno de mlflow run: uv (aislado, desde python_env.yaml) o local (el entorno activo).
 ENV_MANAGER ?= uv
+ALIAS ?= champion
 MLFLOW_RUN = mlflow run . --env-manager $(ENV_MANAGER) --experiment-name mibici-equipo34
 
 #################################################################################
@@ -123,12 +124,12 @@ search:
 ## Registrar y asignar alias: make register Q=p1 [RUN="nombre del run"] [ALIAS=champion]
 .PHONY: register
 register:
-	$(MLFLOW_RUN) -e register -P question=$(Q) -P run_name="$(RUN)" -P alias=$(or $(ALIAS),champion)
+	$(MLFLOW_RUN) -e register -P question=$(Q) -P run_name="$(RUN)" -P alias=$(ALIAS)
 
 ## Predecir test con el modelo registrado: make predict Q=p1 [ALIAS=champion]
 .PHONY: predict
 predict:
-	$(PYTHON_INTERPRETER) -m mibici.modeling.predict --question $(Q) --alias $(or $(ALIAS),champion)
+	$(PYTHON_INTERPRETER) -m mibici.modeling.predict --question $(Q) --alias $(ALIAS)
 
 ## Todos los experimentos y el registro de champions (scripts/run_experiments.sh)
 .PHONY: experiments

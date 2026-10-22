@@ -34,7 +34,7 @@ def get_spec(models: dict[str, ModelSpec], question: str, role: str) -> ModelSpe
     if role not in models:
         raise ValueError(f"{question} no tiene el modelo {role!r}; opciones: {', '.join(models)}")
     spec = models[role]
-    return spec._replace(defaults=dict(spec.defaults or {}))
+    return spec._replace(defaults=spec.defaults or {})
 
 
 def run_name_with_changes(run_name: str, hp: dict, defaults: dict) -> str:

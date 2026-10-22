@@ -38,7 +38,6 @@ from mibici.modeling.common import (
 )
 from mibici.modeling.params import resolve_params
 from mibici.modeling.tracking import common_params, start_run
-from mibici.modeling.wrappers import ThresholdClassifier
 
 P2_FEATURES = [
     "block",
@@ -80,6 +79,23 @@ def best_f1_threshold(y_true, y_score) -> float:
 
 
 P2_CATEGORICAL = ["block", "dow", "month"]
+
+
+class ThresholdClassifier:
+    """Clasificador entrenado con el umbral elegido en validación (no el 0.5 de scikit-learn).
+
+    Es lo que se registra en MLflow, así el modelo del Model Registry decide igual que el run.
+    """
+
+    def __init__(self, estimator, threshold: float):
+        self.estimator = estimator
+        self.threshold = threshold
+
+    def predict_proba(self, X):
+        return self.estimator.predict_proba(X)
+
+    def predict(self, X):
+        return (self.predict_proba(X)[:, 1] >= self.threshold).astype(np.int64)
 
 
 def threshold_on_valid(

@@ -44,22 +44,18 @@ def select_run(client: MlflowClient, question: str, run_name: str = "") -> Run:
     query = f"tags.question = '{question.upper()}' and attributes.status = 'FINISHED'"
     if run_name:
         query += f" and attributes.run_name = '{run_name}'"
-        order = ["attributes.start_time DESC"]
+        order = "attributes.start_time DESC"  # el más reciente con ese nombre
     else:
-        order = [f"metrics.{metric} {'ASC' if direction == 'min' else 'DESC'}"]
-    runs = [
-        r
-        for r in client.search_runs(
-            [experiment.experiment_id], query, order_by=order, max_results=5000
-        )
-        if has_model(r)
-        and metric in r.data.metrics
-        and (run_name or r.data.tags.get("stage_of_work") in ELIGIBLE_STAGES)
-    ]
-    if not runs:
-        detail = f"llamado {run_name!r}" if run_name else f"candidate/search con {metric}"
-        raise ValueError(f"No hay runs terminados de {question.upper()} con modelo {detail}")
-    return runs[0]
+        order = f"metrics.{metric} {'ASC' if direction == 'min' else 'DESC'}"  # el mejor
+    runs = client.search_runs(
+        [experiment.experiment_id], query, order_by=[order], max_results=5000
+    )
+    for run in runs:
+        eligible = run_name or run.data.tags.get("stage_of_work") in ELIGIBLE_STAGES
+        if eligible and has_model(run) and metric in run.data.metrics:
+            return run
+    detail = f"llamado {run_name!r}" if run_name else f"candidate/search con {metric}"
+    raise ValueError(f"No hay runs terminados de {question.upper()} con modelo {detail}")
 
 
 def register(question: str, run_name: str = "", alias: str = "champion") -> int:
@@ -86,17 +82,13 @@ def register(question: str, run_name: str = "", alias: str = "champion") -> int:
     if tags.get("mlflow.parentRunId"):
         lineage["search_parent_run_id"] = tags["mlflow.parentRunId"]
 
-    try:
-        client.get_registered_model(name)
-    except mlflow.exceptions.MlflowException:
-        client.create_registered_model(name)
-    client.update_registered_model(name, description=REGISTERED_MODEL_DESCRIPTIONS[question])
-    client.set_registered_model_tag(name, "team", TEAM)
-    client.set_registered_model_tag(name, "question", question.upper())
-
+    # register_model crea el modelo registrado si todavía no existe.
     version = mlflow.register_model(
         f"runs:/{run.info.run_id}/{MODEL_NAME}", name, tags=lineage
     ).version
+    client.update_registered_model(name, description=REGISTERED_MODEL_DESCRIPTIONS[question])
+    client.set_registered_model_tag(name, "team", TEAM)
+    client.set_registered_model_tag(name, "question", question.upper())
     client.update_model_version(
         name,
         version,

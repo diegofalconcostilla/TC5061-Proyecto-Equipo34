@@ -44,13 +44,12 @@ def run_search(question: str, role: str, grid: str, params: str = "") -> pd.Data
 
     with start_run(question.upper(), role, spec.family, "search", run_name, description):
         children = [RUNNERS[question](role, combo, "search", nested=True) for combo in combos]
+        pick = min if direction == "min" else max
+        best = pick(children, key=lambda c: c.metrics[metric])
         results = pd.DataFrame(
-            [
-                {"run_name": c.run_name, "run_id": c.run_id, **c.hyperparameters, **c.metrics}
-                for c in children
-            ]
+            {"run_name": c.run_name, "run_id": c.run_id, **c.hyperparameters, **c.metrics}
+            for c in children
         ).sort_values(metric, ascending=direction == "min")
-        best = next(c for c in children if c.run_id == results["run_id"].iloc[0])
 
         mlflow.log_params(
             {
