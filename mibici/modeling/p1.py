@@ -25,6 +25,7 @@ from mibici.modeling.artifacts import log_config, log_data, log_figure, log_json
 from mibici.modeling.common import (
     ModelResult,
     ModelSpec,
+    RunSummary,
     get_spec,
     linear_preprocessor,
     run_name_with_changes,
@@ -161,7 +162,7 @@ P1_MODELS: dict[str, ModelSpec] = {
 }
 
 
-def run_p1(role: str, params: str = "", stage: str = "") -> None:
+def run_p1(role: str, params: str = "", stage: str = "", nested: bool = False) -> RunSummary:
     spec = get_spec(P1_MODELS, "p1", role)
     hp = resolve_params(spec.defaults, params)
     df = pd.read_parquet(P1_DATASET_PATH)
@@ -178,7 +179,9 @@ def run_p1(role: str, params: str = "", stage: str = "") -> None:
     preds = result.scores
     run_name = run_name_with_changes(result.run_name, hp, spec.defaults)
 
-    with start_run("P1", role, spec.family, stage or spec.stage, run_name, result.description):
+    with start_run(
+        "P1", role, spec.family, stage or spec.stage, run_name, result.description, nested
+    ) as run:
         mlflow.log_params(run_params)
         metrics = {}
         for s in ("valid", "test"):
@@ -205,3 +208,4 @@ def run_p1(role: str, params: str = "", stage: str = "") -> None:
         )
         log_json(metrics, "metrics.json")
     logger.success(f"{run_name}: test_mae={metrics['test_mae']:.3f}")
+    return RunSummary(run.info.run_id, run_name, hp, metrics)

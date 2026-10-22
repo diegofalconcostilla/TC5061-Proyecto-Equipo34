@@ -140,6 +140,14 @@ P3_MODEL_PARAMS = {
     "kmeans": {"n_clusters": 0, "n_init": 20},
 }
 
+# Métrica con la que la búsqueda elige la mejor combinación y el registro elige al champion:
+# (métrica, "min" o "max"). Siempre de validación (P3 no tiene validación: perfiles de train).
+SELECTION_METRIC = {
+    "p1": ("valid_wape", "min"),
+    "p2": ("valid_pr_auc", "max"),
+    "p3": ("train_profile_silhouette", "max"),
+}
+
 # ---------------------------------------------------------------------------
 # MLflow
 # ---------------------------------------------------------------------------

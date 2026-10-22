@@ -6,6 +6,8 @@ solo se aplican los cambios pedidos, convertidos al tipo del valor por defecto.
 
 from __future__ import annotations
 
+import itertools
+
 
 def _convert(key: str, text: str, default):
     text = text.strip()
@@ -37,6 +39,20 @@ def parse_overrides(text: str) -> dict[str, str]:
             raise ValueError(f"Formato inválido {item!r}; se espera clave=valor")
         overrides[key.strip()] = value
     return overrides
+
+
+def expand_grid(text: str) -> list[str]:
+    """Malla ``"a=1|2;b=x|y"`` -> una cadena ``params`` por combinación (``"a=1,b=x"``, ...)."""
+    axes = []
+    for item in filter(None, (part.strip() for part in text.split(";"))):
+        key, sep, values = item.partition("=")
+        options = [v.strip() for v in values.split("|") if v.strip()]
+        if not sep or not key.strip() or not options:
+            raise ValueError(f"Formato inválido {item!r}; se espera clave=v1|v2")
+        axes.append([f"{key.strip()}={v}" for v in options])
+    if not axes:
+        raise ValueError("La malla está vacía; ejemplo: 'learning_rate=0.03|0.1;max_iter=300|500'")
+    return [",".join(combo) for combo in itertools.product(*axes)]
 
 
 def resolve_params(defaults: dict, text: str = "") -> dict:

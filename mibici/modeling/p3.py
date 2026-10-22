@@ -39,7 +39,7 @@ from mibici.modeling.artifacts import (
     log_model,
     log_table,
 )
-from mibici.modeling.common import ModelSpec, get_spec, run_name_with_changes
+from mibici.modeling.common import ModelSpec, RunSummary, get_spec, run_name_with_changes
 from mibici.modeling.params import resolve_params
 from mibici.modeling.tracking import common_params, start_run
 
@@ -169,7 +169,7 @@ P3_MODELS: dict[str, ModelSpec] = {
 }
 
 
-def run_p3(role: str, params: str = "", stage: str = "") -> None:
+def run_p3(role: str, params: str = "", stage: str = "", nested: bool = False) -> RunSummary:
     spec = get_spec(P3_MODELS, "p3", role)
     hp = resolve_params(spec.defaults, params)
     train = pd.read_parquet(P3_DATASET_PATH)
@@ -193,7 +193,9 @@ def run_p3(role: str, params: str = "", stage: str = "") -> None:
     common = train[["station_id"]].assign(label_train=labels).merge(test, on="station_id")
     stability = adjusted_rand_score(common["label_train"], result.assign(common))
 
-    with start_run("P3", role, spec.family, stage or spec.stage, run_name, result.description):
+    with start_run(
+        "P3", role, spec.family, stage or spec.stage, run_name, result.description, nested
+    ) as run:
         mlflow.log_params(run_params)
         metrics = cluster_metrics(x_profile, labels, "train_profile")
         metrics |= cluster_metrics(result.x_own, labels, "train_own")
@@ -236,3 +238,4 @@ def run_p3(role: str, params: str = "", stage: str = "") -> None:
     logger.success(
         f"{run_name}: k={k}, train_profile_silhouette={metrics['train_profile_silhouette']:.3f}"
     )
+    return RunSummary(run.info.run_id, run_name, hp, metrics)

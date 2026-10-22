@@ -25,3 +25,15 @@ entry_points:
     command: >-
       python -m mibici.modeling.train --question {question} --model {model}
       --params {params} --stage {stage}
+
+  # Búsqueda con nested runs: un run hijo por combinación de grid ("k=v1|v2;k2=v3|v4").
+  # params fija cambios para todas las combinaciones. El padre elige con SELECTION_METRIC.
+  search:
+    parameters:
+      question: {type: string}
+      model: {type: string}
+      grid: {type: string}
+      params: {type: string, default: ""}
+    command: >-
+      python -m mibici.modeling.search --question {question} --model {model}
+      --grid {grid} --params {params}

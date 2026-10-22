@@ -2,7 +2,8 @@ import pytest
 
 from mibici.config import P1_MODEL_PARAMS, P2_MODEL_PARAMS, P3_MODEL_PARAMS
 from mibici.modeling.common import run_name_with_changes
-from mibici.modeling.params import resolve_params
+from mibici.modeling.params import expand_grid, resolve_params
+from mibici.modeling.search import combine
 from mibici.modeling.train import MODELS
 
 DEFAULTS = {"learning_rate": 0.05, "max_iter": 500, "early_stopping": True, "class_weight": None}
@@ -51,3 +52,23 @@ def test_model_defaults_come_from_config(question, params):
         assert spec.stage in ("baseline", "candidate")
         if spec.defaults:
             assert name in params, f"{question}/{name} define defaults fuera de config.py"
+
+
+def test_grid_expands_to_every_combination():
+    assert expand_grid("learning_rate=0.03|0.1; max_iter=300|500") == [
+        "learning_rate=0.03,max_iter=300",
+        "learning_rate=0.03,max_iter=500",
+        "learning_rate=0.1,max_iter=300",
+        "learning_rate=0.1,max_iter=500",
+    ]
+
+
+@pytest.mark.parametrize("grid", ["", "learning_rate", "learning_rate=", "=0.1|0.2"])
+def test_invalid_grid_is_rejected(grid):
+    with pytest.raises(ValueError):
+        expand_grid(grid)
+
+
+def test_combination_overrides_fixed_params():
+    hp = resolve_params(DEFAULTS, combine("max_iter=100,learning_rate=0.2", "learning_rate=0.1"))
+    assert hp["max_iter"] == 100 and hp["learning_rate"] == 0.1

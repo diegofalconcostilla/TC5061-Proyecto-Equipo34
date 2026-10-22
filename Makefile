@@ -115,6 +115,11 @@ features:
 train:
 	$(MLFLOW_RUN) -e train -P question=$(Q) -P model=$(M) -P params="$(P)"
 
+## Búsqueda con nested runs: make search Q=p1 M=hgb G="learning_rate=0.03|0.1;max_iter=300|500"
+.PHONY: search
+search:
+	$(MLFLOW_RUN) -e search -P question=$(Q) -P model=$(M) -P grid="$(G)" -P params="$(P)"
+
 ## Pipeline completo: datos -> features -> experimento
 .PHONY: all
 all: data features train

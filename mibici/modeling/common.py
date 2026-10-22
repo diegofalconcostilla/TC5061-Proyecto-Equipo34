@@ -73,3 +73,12 @@ def linear_preprocessor(
             ("scale", StandardScaler(), [c for c in numeric if c not in log_counts]),
         ]
     )
+
+
+class RunSummary(NamedTuple):
+    """Lo que un ``run_pX`` registró; lo usa la búsqueda para comparar combinaciones."""
+
+    run_id: str
+    run_name: str
+    hyperparameters: dict
+    metrics: dict[str, float]
