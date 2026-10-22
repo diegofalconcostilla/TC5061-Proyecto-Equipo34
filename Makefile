@@ -130,6 +130,11 @@ register:
 predict:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.predict --question $(Q) --alias $(or $(ALIAS),champion)
 
-## Pipeline completo: datos -> features -> experimento
+## Todos los experimentos y el registro de champions (scripts/run_experiments.sh)
+.PHONY: experiments
+experiments:
+	bash scripts/run_experiments.sh
+
+## Corrida oficial desde un clon limpio: ingesta -> experimentos -> registro
 .PHONY: all
-all: data features train
+all: ingest experiments
