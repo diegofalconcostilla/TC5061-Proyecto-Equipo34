@@ -26,6 +26,7 @@ from mibici.config import (
     P2_RISK_CAPACITY_FRACTION,
     SEED,
 )
+from mibici.modeling.artifacts import log_config, log_data, log_figure, log_json, log_model
 from mibici.modeling.common import (
     ModelResult,
     ModelSpec,
@@ -35,7 +36,8 @@ from mibici.modeling.common import (
     split_frames,
 )
 from mibici.modeling.params import resolve_params
-from mibici.modeling.tracking import common_params, log_figure, log_json, start_run
+from mibici.modeling.tracking import common_params, start_run
+from mibici.modeling.wrappers import ThresholdClassifier
 
 P2_FEATURES = [
     "block",
@@ -158,6 +160,8 @@ def p2_logistic(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
         },
         scores,
         labels,
+        estimator=ThresholdClassifier(model, decision),
+        features=P2_FEATURES,
     )
 
 
@@ -179,6 +183,8 @@ def p2_hgb(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
         },
         scores,
         labels,
+        estimator=ThresholdClassifier(model, decision),
+        features=P2_FEATURES,
     )
 
 
@@ -214,6 +220,10 @@ def run_p2(role: str, params: str = "", stage: str = "") -> None:
         for s in ("valid", "test"):
             metrics |= classification_metrics(parts[s]["risk"], scores[s], labels[s], s)
         mlflow.log_metrics(metrics)
+        log_data(parts["train"], "p2", P2_DATASET_PATH, target="risk")
+        log_config({"question": "p2", "model": role, "hyperparameters": hp, "params": run_params})
+        if result.estimator is not None:
+            log_model(result.estimator, parts["train"][result.features].head(5))
         log_figure(
             plots.plot_classification,
             "p2_test_pr_confusion.png",

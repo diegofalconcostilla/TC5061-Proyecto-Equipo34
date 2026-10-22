@@ -1,11 +1,8 @@
-"""Conexión con MLflow: servidor, experimento, etiquetas y registro de artefactos."""
+"""Conexión con MLflow: servidor, experimento, parámetros comunes y etiquetas de cada run."""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 import subprocess
-import tempfile
 
 import mlflow
 
@@ -103,18 +100,3 @@ def start_run(
     run = mlflow.start_run(run_name=run_name, nested=nested)
     mlflow.set_tags(tags)
     return run
-
-
-def log_json(data: dict, name: str) -> None:
-    """Registra un diccionario como artefacto JSON."""
-    with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / name
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        mlflow.log_artifact(str(path))
-
-
-def log_figure(builder, name: str, *args, **kwargs) -> None:
-    """Genera una figura con ``builder`` en un directorio temporal y la registra."""
-    with tempfile.TemporaryDirectory() as tmp:
-        path = builder(*args, path=Path(tmp) / name, **kwargs)
-        mlflow.log_artifact(str(path), artifact_path="figures")

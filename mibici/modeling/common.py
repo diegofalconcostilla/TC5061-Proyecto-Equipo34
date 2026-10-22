@@ -51,6 +51,8 @@ class ModelResult(NamedTuple):
     params: dict
     scores: dict[str, np.ndarray]  # predicción (P1) o score continuo (P2), en valid y test
     labels: dict[str, np.ndarray] | None = None  # predicción binaria (solo P2)
+    estimator: object | None = None  # modelo entrenado que se registra; None en reglas
+    features: list[str] | None = None  # columnas de entrada de ``estimator``
 
 
 def linear_preprocessor(

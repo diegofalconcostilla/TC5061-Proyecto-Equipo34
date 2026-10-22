@@ -21,6 +21,7 @@ from mibici.config import (
     P1_MODEL_PARAMS,
     SEED,
 )
+from mibici.modeling.artifacts import log_config, log_data, log_figure, log_json, log_model
 from mibici.modeling.common import (
     ModelResult,
     ModelSpec,
@@ -30,7 +31,7 @@ from mibici.modeling.common import (
     split_frames,
 )
 from mibici.modeling.params import resolve_params
-from mibici.modeling.tracking import common_params, log_figure, log_json, start_run
+from mibici.modeling.tracking import common_params, start_run
 
 P1_FEATURES = [
     "departures_lag1",
@@ -128,6 +129,8 @@ def p1_poisson_glm(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
             "hp_n_iter_fitted": int(model[-1].n_iter_),
         },
         {s: model.predict(parts[s][P1_FEATURES]) for s in ("valid", "test")},
+        estimator=model,
+        features=P1_FEATURES,
     )
 
 
@@ -144,6 +147,8 @@ def p1_hgb(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
             "hp_n_iter_fitted": model.n_iter_,
         },
         {s: model.predict(parts[s][P1_FEATURES]) for s in ("valid", "test")},
+        estimator=model,
+        features=P1_FEATURES,
     )
 
 
@@ -179,6 +184,10 @@ def run_p1(role: str, params: str = "", stage: str = "") -> None:
         for s in ("valid", "test"):
             metrics |= regression_metrics(parts[s]["departures"], preds[s], s)
         mlflow.log_metrics(metrics)
+        log_data(parts["train"], "p1", P1_DATASET_PATH, target="departures")
+        log_config({"question": "p1", "model": role, "hyperparameters": hp, "params": run_params})
+        if result.estimator is not None:
+            log_model(result.estimator, parts["train"][result.features].head(5))
         log_figure(
             plots.plot_daily_forecast,
             "p1_test_viajes_diarios.png",
@@ -186,6 +195,13 @@ def run_p1(role: str, params: str = "", stage: str = "") -> None:
             parts["test"]["departures"].values,
             preds["test"],
             title=f"P1 - {run_name} (test, suma de estaciones)",
+        )
+        log_figure(
+            plots.plot_regression_diagnostics,
+            "p1_test_real_vs_predicho_residuales.png",
+            parts["test"]["departures"].values,
+            preds["test"],
+            title=f"P1 - {run_name} (test, estación-día)",
         )
         log_json(metrics, "metrics.json")
     logger.success(f"{run_name}: test_mae={metrics['test_mae']:.3f}")

@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
-import tempfile
 from typing import NamedTuple
 
 from loguru import logger
@@ -33,9 +31,17 @@ from mibici.config import (
     SEED,
 )
 from mibici.features import p3_feature_columns
+from mibici.modeling.artifacts import (
+    log_config,
+    log_data,
+    log_figure,
+    log_json,
+    log_model,
+    log_table,
+)
 from mibici.modeling.common import ModelSpec, get_spec, run_name_with_changes
 from mibici.modeling.params import resolve_params
-from mibici.modeling.tracking import common_params, log_figure, log_json, start_run
+from mibici.modeling.tracking import common_params, start_run
 
 
 def cluster_metrics(x, labels, prefix: str) -> dict[str, float]:
@@ -74,6 +80,8 @@ class P3Result(NamedTuple):
     assign: Callable[[pd.DataFrame], np.ndarray]  # asigna grupo a perfiles de otro periodo
     x_own: np.ndarray  # espacio en que el modelo agrupa, para la silueta propia
     k_curve: dict[int, float] | None = None  # silueta por k, si el modelo elige k
+    estimator: object | None = None  # modelo entrenado que se registra; None en reglas
+    features: list[str] | None = None  # columnas de entrada de ``estimator``
 
 
 def p3_geographic_kmeans(train: pd.DataFrame, x_profile: np.ndarray, hp: dict) -> P3Result:
@@ -91,6 +99,8 @@ def p3_geographic_kmeans(train: pd.DataFrame, x_profile: np.ndarray, hp: dict) -
         labels,
         lambda df: model.predict(df[cols]),
         model[:-1].transform(train[cols]),
+        estimator=model,
+        features=cols,
     )
 
 
@@ -147,6 +157,8 @@ def p3_profile_kmeans(train: pd.DataFrame, x_profile: np.ndarray, hp: dict) -> P
         lambda df: model.predict(df[cols]),
         model[:-1].transform(train[cols]),
         k_curve,
+        estimator=model,
+        features=cols,
     )
 
 
@@ -188,6 +200,10 @@ def run_p3(role: str, params: str = "", stage: str = "") -> None:
         metrics["test_stability_ari"] = stability
         metrics["train_min_cluster_size"] = int(np.bincount(labels).min())
         mlflow.log_metrics(metrics | extra_metrics)
+        log_data(train, "p3", P3_DATASET_PATH, target=None)
+        log_config({"question": "p3", "model": role, "hyperparameters": hp, "params": run_params})
+        if result.estimator is not None:
+            log_model(result.estimator, train[result.features].head(5))
         log_figure(
             plots.plot_cluster_map,
             "p3_mapa_grupos.png",
@@ -210,12 +226,12 @@ def run_p3(role: str, params: str = "", stage: str = "") -> None:
                 list(k_curve.values()),
                 k,
             )
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "p3_asignacion_estaciones.csv"
+        log_table(
             train[["station_id", "name", "municipio", "latitude", "longitude"]].assign(
                 cluster=labels
-            ).to_csv(path, index=False)
-            mlflow.log_artifact(str(path))
+            ),
+            "p3_asignacion_estaciones.csv",
+        )
         log_json(metrics, "metrics.json")
     logger.success(
         f"{run_name}: k={k}, train_profile_silhouette={metrics['train_profile_silhouette']:.3f}"
