@@ -4,6 +4,7 @@ Todas las rutas, fechas, semillas y parámetros compartidos viven aquí. Ningún
 módulo define rutas, fechas ni semillas por su cuenta.
 """
 
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -101,12 +102,73 @@ P3_RULE_EVENING_HOURS = range(16, 20)
 P3_RULE_THRESHOLDS = (0.4, 0.6)  # < 0.4 destino matutino, > 0.6 origen matutino, resto mixta
 
 # ---------------------------------------------------------------------------
+# Hiperparámetros por defecto de cada modelo (se sobrescriben con -P params="k=v,...")
+# ---------------------------------------------------------------------------
+# La clave es el nombre del modelo en P1_MODELS, P2_MODELS o P3_MODELS. Los modelos sin
+# hiperparámetros (reglas y promedios) no aparecen aquí.
+P1_MODEL_PARAMS = {
+    "poisson": {"alpha": 1e-4, "max_iter": 1000},
+    "hgb": {
+        "loss": "poisson",
+        "learning_rate": 0.05,
+        "max_iter": 500,
+        "max_leaf_nodes": 63,
+        "min_samples_leaf": 50,
+        "l2_regularization": 1.0,
+        "early_stopping": True,
+        "validation_fraction": 0.1,
+        "n_iter_no_change": 30,
+    },
+}
+P2_MODEL_PARAMS = {
+    "logistica": {"C": 1.0, "class_weight": "balanced", "max_iter": 1000},
+    "hgb": {
+        "learning_rate": 0.05,
+        "max_iter": 400,
+        "max_leaf_nodes": 63,
+        "min_samples_leaf": 100,
+        "l2_regularization": 1.0,
+        "class_weight": "balanced",
+        "early_stopping": True,
+        "validation_fraction": 0.1,
+        "n_iter_no_change": 30,
+    },
+}
+P3_MODEL_PARAMS = {
+    "baseline": {"n_clusters": P3_BASELINE_K, "n_init": 20},
+    # n_clusters = 0: se elige k en P3_K_RANGE por silueta.
+    "kmeans": {"n_clusters": 0, "n_init": 20},
+}
+
+# Métrica con la que la búsqueda elige la mejor combinación y el registro elige al champion:
+# (métrica, "min" o "max"). Siempre de validación (P3 no tiene validación: perfiles de train).
+SELECTION_METRIC = {
+    "p1": ("valid_wape", "min"),
+    "p2": ("valid_pr_auc", "max"),
+    "p3": ("train_profile_silhouette", "max"),
+}
+
+# Model Registry: un modelo registrado por pregunta; la versión en uso lleva el alias champion.
+REGISTERED_MODEL_NAMES = {
+    "p1": "mibici-equipo34-p1-demanda",
+    "p2": "mibici-equipo34-p2-riesgo",
+    "p3": "mibici-equipo34-p3-grupos",
+}
+REGISTERED_MODEL_DESCRIPTIONS = {
+    "p1": "P1: viajes que salen de cada estación al día siguiente (regresión, estación-día).",
+    "p2": "P2: riesgo de desbalance de una estación en el siguiente bloque de 3 h "
+    "(clasificación binaria; predict devuelve la etiqueta con el umbral elegido en validación).",
+    "p3": "P3: grupo de uso de cada estación según su perfil horario (clustering).",
+}
+
+# ---------------------------------------------------------------------------
 # MLflow
 # ---------------------------------------------------------------------------
 TEAM = "equipo34"
 MLFLOW_EXPERIMENT_NAME = f"mibici-{TEAM}"
-MLFLOW_TRACKING_URI = f"sqlite:///{(PROJ_ROOT / 'mlflow.db').as_posix()}"
-MLFLOW_ARTIFACTS_DIR = PROJ_ROOT / "mlartifacts"
+# Servidor local: mlflow server --backend-store-uri sqlite:///mlflow.db --port 5001
+# (el puerto 5000 lo ocupa AirPlay en macOS). mlflow run exporta esta variable al proceso.
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
 
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135

@@ -254,10 +254,7 @@ def block_start(ts: pd.Series) -> pd.Series:
     hours = ts.dt.hour
     valid = hours >= P2_FIRST_HOUR
 
-    block = (
-        (hours.clip(lower=P2_FIRST_HOUR) - P2_FIRST_HOUR)
-        // P2_BLOCK_HOURS
-    )
+    block = (hours.clip(lower=P2_FIRST_HOUR) - P2_FIRST_HOUR) // P2_BLOCK_HOURS
 
     start = ts.dt.normalize() + pd.to_timedelta(
         P2_FIRST_HOUR + block * P2_BLOCK_HOURS,
@@ -265,7 +262,6 @@ def block_start(ts: pd.Series) -> pd.Series:
     )
 
     return start.where(valid)
-
 
 
 def risk_label(net_flow: pd.Series, capacity: pd.Series) -> pd.DataFrame:

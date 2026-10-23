@@ -1,0 +1,50 @@
+name: mibici-equipo34
+
+# Entorno: Python 3.12 con las versiones fijas de requirements.txt.
+python_env: python_env.yaml
+
+# Rutas, fechas, cortes y semilla viven en mibici/config.py; no se repiten aquí.
+entry_points:
+  # Descarga, limpia y versiona los viajes (data/manifest.json), construye los datasets de P1-P3
+  # y registra el manifiesto en el run de ingesta.
+  ingest:
+    command: >-
+      python -m mibici.dataset ingest && python -m mibici.features
+      && python -m mibici.modeling.log_ingest
+
+  # Entrena un modelo de la tabla de su pregunta (P1_MODELS, P2_MODELS o P3_MODELS).
+  # params cambia los hiperparámetros por defecto de config.py: "learning_rate=0.1,max_iter=300".
+  # stage vacío = stage_of_work por defecto del modelo (baseline o candidate).
+  train:
+    parameters:
+      question: {type: string, default: p1}
+      model: {type: string, default: baseline}
+      params: {type: string, default: ""}
+      stage: {type: string, default: ""}
+    # MLflow ya entrecomilla cada valor (shlex.quote); no agregar comillas aquí.
+    command: >-
+      python -m mibici.modeling.train --question {question} --model {model}
+      --params {params} --stage {stage}
+
+  # Búsqueda con nested runs: un run hijo por combinación de grid ("k=v1|v2;k2=v3|v4").
+  # params fija cambios para todas las combinaciones. El padre elige con SELECTION_METRIC.
+  search:
+    parameters:
+      question: {type: string}
+      model: {type: string}
+      grid: {type: string}
+      params: {type: string, default: ""}
+    command: >-
+      python -m mibici.modeling.search --question {question} --model {model}
+      --grid {grid} --params {params}
+
+  # Registra el modelo de un run en el Model Registry y le asigna el alias.
+  # run_name vacío = el mejor candidate/search con modelo según SELECTION_METRIC (validación).
+  register:
+    parameters:
+      question: {type: string}
+      run_name: {type: string, default: ""}
+      alias: {type: string, default: champion}
+    command: >-
+      python -m mibici.modeling.registry --question {question} --run-name {run_name}
+      --alias {alias}
