@@ -22,8 +22,15 @@ from loguru import logger
 import mlflow
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, HistGradientBoostingClassifier, HistGradientBoostingRegressor
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.cluster import MiniBatchKMeans, Birch
+from sklearn.mixture import GaussianMixture
 from sklearn.cluster import KMeans
-from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
+from sklearn.linear_model import Ridge
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.metrics import (
     adjusted_rand_score,
     average_precision_score,
@@ -215,7 +222,8 @@ def run_p1(role: str) -> None:
         description = "P1 baseline: predice los viajes del mismo día de la semana anterior."
         params |= {"model": "SeasonalNaive", "season_lag_days": 7}
         preds = {s: parts[s]["departures_lag7"] for s in ("valid", "test")}
-    else:
+        
+    elif role == "candidate" or role == "candidate-hgb":
         run_name = "p1-hgb-regressor-lags-calendario"
         description = (
             "P1 candidato: HistGradientBoostingRegressor (Poisson) con lags y calendario."
@@ -241,11 +249,63 @@ def run_p1(role: str) -> None:
         params["hp_n_iter_fitted"] = model.n_iter_
         preds = {s: model.predict(parts[s][P1_FEATURES]) for s in ("valid", "test")}
 
+    elif role == "candidate-rf":
+        run_name = "p1-random-forest-regressor"
+        description = "P1 variante 1: RandomForestRegressor con hiperparámetros base."
+        hp = {
+            "n_estimators": 100,
+            "max_depth": 15,
+            "min_samples_leaf": 10,
+        }
+        params |= {
+            "model": "RandomForestRegressor",
+            "features": ",".join(P1_FEATURES),
+            **{f"hp_{k}": v for k, v in hp.items()},
+        }
+        model = RandomForestRegressor(random_state=SEED, **hp, n_jobs=-1)
+        model.fit(parts["train"][P1_FEATURES], parts["train"]["departures"])
+        preds = {s: model.predict(parts[s][P1_FEATURES]) for s in ("valid", "test")}
+
+    elif role == "candidate-ridge":
+        run_name = "p1-ridge-regression"
+        description = "P1 variante 2: Ridge Regression con estandarización de variables."
+        hp = {
+            "alpha": 1.0,
+        }
+        params |= {
+            "model": "Ridge",
+            "features": ",".join(P1_FEATURES),
+            **{f"hp_{k}": v for k, v in hp.items()},
+        }
+        # Creamos un pipeline que escala los datos y aplica Ridge
+        model = make_pipeline(StandardScaler(), Ridge(**hp))
+        model.fit(parts["train"][P1_FEATURES], parts["train"]["departures"])
+        preds = {s: model.predict(parts[s][P1_FEATURES]) for s in ("valid", "test")}
+
+    elif role == "candidate-hgb-v2":
+        run_name = "p1-hgb-regressor-squared-error"
+        description = "P1 variante 3: HistGradientBoostingRegressor con función de pérdida squared_error."
+        hp = {
+            "loss": "squared_error",
+            "learning_rate": 0.1,
+            "max_iter": 300,
+            "max_leaf_nodes": 31,
+        }
+        params |= {
+            "model": "HistGradientBoostingRegressorV2",
+            "features": ",".join(P1_FEATURES),
+            **{f"hp_{k}": v for k, v in hp.items()},
+        }
+        model = HistGradientBoostingRegressor(random_state=SEED, **hp)
+        model.fit(parts["train"][P1_FEATURES], parts["train"]["departures"])
+        params["hp_n_iter_fitted"] = model.n_iter_
+        preds = {s: model.predict(parts[s][P1_FEATURES]) for s in ("valid", "test")}
+
     with start_run("P1", role, run_name, description):
         mlflow.log_params(params)
         metrics = {}
         for s in ("valid", "test"):
-            metrics |= regression_metrics(parts[s]["departures"], preds[s], s)
+            metrics |= regression_metrics(parts["test" if s=="test" else "valid"]["departures"] if False else parts[s]["departures"], preds[s], s)
         mlflow.log_metrics(metrics)
         log_figure(
             plots.plot_daily_forecast,
@@ -257,7 +317,6 @@ def run_p1(role: str) -> None:
         )
         log_json(metrics, "metrics.json")
     logger.success(f"{run_name}: test_mae={metrics['test_mae']:.3f}")
-
 
 # ---------------------------------------------------------------------------
 # P2: clasificación del riesgo por estación y bloque de 3 horas
@@ -305,7 +364,8 @@ def run_p2(role: str) -> None:
             for s in ("valid", "test")
         }
         labels = {s: parts[s]["risk_lag42"].astype(int) for s in ("valid", "test")}
-    else:
+
+    elif role == "candidate" or role == "candidate-hgb":
         run_name = "p2-hgb-classifier-flujos-lag"
         description = (
             "P2 candidato: HistGradientBoostingClassifier balanceado; umbral elegido "
@@ -335,6 +395,70 @@ def run_p2(role: str) -> None:
         params["decision_threshold"] = round(decision, 4)
         labels = {s: (scores[s] >= decision).astype(int) for s in ("valid", "test")}
 
+    elif role == "candidate-rf":
+        run_name = "p2-random-forest-classifier"
+        description = "P2 variante 1: RandomForestClassifier con balanceo de clases."
+        hp = {
+            "n_estimators": 150,
+            "max_depth": 12,
+            "min_samples_leaf": 50,
+            "class_weight": "balanced",
+        }
+        params |= {
+            "model": "RandomForestClassifier",
+            "features": ",".join(P2_FEATURES),
+            **{f"hp_{k}": v for k, v in hp.items()},
+        }
+        model = RandomForestClassifier(random_state=SEED, **hp, n_jobs=-1)
+        model.fit(parts["train"][P2_FEATURES], parts["train"]["risk"])
+        scores = {s: model.predict_proba(parts[s][P2_FEATURES])[:, 1] for s in ("valid", "test")}
+        decision = best_f1_threshold(parts["valid"]["risk"], scores["valid"])
+        params["decision_threshold"] = round(decision, 4)
+        labels = {s: (scores[s] >= decision).astype(int) for s in ("valid", "test")}
+
+    elif role == "candidate-lr":
+        run_name = "p2-logistic-regression"
+        description = "P2 variante 2: LogisticRegression con escalado de características."
+        hp = {
+            "C": 1.0,
+            "class_weight": "balanced",
+            "max_iter": 500,
+        }
+        params |= {
+            "model": "LogisticRegression",
+            "features": ",".join(P2_FEATURES),
+            **{f"hp_{k}": v for k, v in hp.items()},
+        }
+        model = make_pipeline(StandardScaler(), LogisticRegression(random_state=SEED, **hp))
+        model.fit(parts["train"][P2_FEATURES], parts["train"]["risk"])
+        scores = {s: model.predict_proba(parts[s][P2_FEATURES])[:, 1] for s in ("valid", "test")}
+        decision = best_f1_threshold(parts["valid"]["risk"], scores["valid"])
+        params["decision_threshold"] = round(decision, 4)
+        labels = {s: (scores[s] >= decision).astype(int) for s in ("valid", "test")}
+
+    elif role == "candidate-hgb-v2":
+        run_name = "p2-hgb-classifier-fast"
+        description = "P2 variante 3: HistGradientBoostingClassifier con mayor tasa de aprendizaje."
+        hp = {
+            "learning_rate": 0.1,
+            "max_iter": 200,
+            "max_leaf_nodes": 31,
+            "class_weight": "balanced",
+            "early_stopping": True,
+        }
+        params |= {
+            "model": "HistGradientBoostingClassifierV2",
+            "features": ",".join(P2_FEATURES),
+            **{f"hp_{k}": v for k, v in hp.items()},
+        }
+        model = HistGradientBoostingClassifier(random_state=SEED, **hp)
+        model.fit(parts["train"][P2_FEATURES], parts["train"]["risk"])
+        params["hp_n_iter_fitted"] = model.n_iter_
+        scores = {s: model.predict_proba(parts[s][P2_FEATURES])[:, 1] for s in ("valid", "test")}
+        decision = best_f1_threshold(parts["valid"]["risk"], scores["valid"])
+        params["decision_threshold"] = round(decision, 4)
+        labels = {s: (scores[s] >= decision).astype(int) for s in ("valid", "test")}
+
     with start_run("P2", role, run_name, description):
         mlflow.log_params(params)
         metrics = {}
@@ -352,7 +476,6 @@ def run_p2(role: str) -> None:
         log_json(metrics, "metrics.json")
     logger.success(f"{run_name}: test_pr_auc={metrics['test_pr_auc']:.3f}")
 
-
 # ---------------------------------------------------------------------------
 # P3: clustering de estaciones por patrón de uso
 # ---------------------------------------------------------------------------
@@ -368,13 +491,13 @@ def run_p3(role: str) -> None:
     train = pd.read_parquet(P3_DATASET_PATH)
     test = pd.read_parquet(P3_TEST_DATASET_PATH)
     profile_cols = p3_feature_columns(train)
-    # Espacio de evaluación común: perfiles de uso estandarizados con estadísticas de train.
     scaler = StandardScaler().fit(train[profile_cols])
     x_profile = scaler.transform(train[profile_cols])
 
     params = common_params("estacion", "perfil del periodo de entrenamiento")
     params |= {"n_stations_train": len(train), "n_stations_test": len(test)}
     extra_metrics: dict[str, float] = {}
+    k_curve = None
 
     if role == "baseline":
         run_name = "p3-baseline-kmeans-geografico"
@@ -383,13 +506,10 @@ def run_p3(role: str) -> None:
         params |= {"model": "KMeans", "features": "latitude,longitude", "hp_n_clusters": k}
         model = make_pipeline(StandardScaler(), KMeans(k, n_init=20, random_state=SEED))
         labels = model.fit_predict(train[cols])
-        k_curve = None
-    else:
+
+    elif role == "candidate" or role == "candidate-kmeans":
         run_name = "p3-kmeans-perfiles-uso"
-        description = (
-            "P3 candidato: KMeans sobre perfiles horarios de uso, volumen y balance "
-            "de flujos; k elegido por silueta."
-        )
+        description = "P3 candidato: KMeans sobre perfiles horarios de uso; k elegido por silueta."
         cols = profile_cols
         k_curve = {}
         for k in P3_K_RANGE:
@@ -401,56 +521,81 @@ def run_p3(role: str) -> None:
             "features": "perfil_horario_48+volumen+balance+duracion",
             "n_features": len(cols),
             "hp_n_clusters": k,
-            "hp_k_range": f"{min(P3_K_RANGE)}-{max(P3_K_RANGE)}",
         }
         model = make_pipeline(StandardScaler(), KMeans(k, n_init=20, random_state=SEED))
         labels = model.fit_predict(train[cols])
         extra_metrics = {f"train_silhouette_k{kk}": v for kk, v in k_curve.items()}
 
-    # Estabilidad temporal: se asignan las estaciones con su perfil del periodo de test a los
-    # grupos aprendidos en train y se compara con su grupo original (ARI).
+    elif role == "candidate-minibatch":
+        run_name = "p3-minibatch-kmeans"
+        description = "P3 variante 1: MiniBatchKMeans sobre perfiles de uso."
+        cols = profile_cols
+        k = 3
+        params |= {"model": "MiniBatchKMeans", "features": "perfil_horario", "hp_n_clusters": k}
+        model = make_pipeline(StandardScaler(), MiniBatchKMeans(n_clusters=k, random_state=SEED, n_init=10))
+        labels = model.fit_predict(train[cols])
+
+    elif role == "candidate-birch":
+        run_name = "p3-birch-clustering"
+        description = "P3 variante 2: Birch clustering sobre perfiles de uso."
+        cols = profile_cols
+        k = 3
+        params |= {"model": "Birch", "features": "perfil_horario", "hp_n_clusters": k}
+        model = make_pipeline(StandardScaler(), Birch(n_clusters=k))
+        labels = model.fit_predict(train[cols])
+
+    elif role == "candidate-gmm":
+        run_name = "p3-gaussian-mixture"
+        description = "P3 variante 3: Gaussian Mixture Model (GMM) sobre perfiles de uso."
+        cols = profile_cols
+        k = 3
+        params |= {"model": "GaussianMixture", "features": "perfil_horario", "hp_n_components": k}
+        # GMM no es un estimador estándar con predict_predict dentro de pipeline igual, lo manejamos limpio:
+        scaler_gmm = StandardScaler()
+        x_scaled = scaler_gmm.fit_transform(train[cols])
+        gmm = GaussianMixture(n_components=k, random_state=SEED)
+        labels = gmm.fit_predict(x_scaled)
+        
+        # Envoltorio simple para compatibilidad con el resto del script
+        class GMMWrapper:
+            def __init__(self, sc, gm):
+                self.sc = sc
+                self.gm = gm
+            def predict(self, X):
+                return self.gm.predict(self.sc.transform(X))
+            def __getitem__(self, idx): # Para simular model[:-1]
+                return self.sc
+        model = GMMWrapper(scaler_gmm, gmm)
+        k = 3
+
+    # Estabilidad temporal
     common = train[["station_id"]].assign(label_train=labels).merge(test, on="station_id")
     stability = adjusted_rand_score(common["label_train"], model.predict(common[cols]))
 
     with start_run("P3", role, run_name, description):
-        mlflow.log_params(params | {"hp_n_init": 20})
+        mlflow.log_params(params)
         metrics = cluster_metrics(x_profile, labels, "train_profile")
-        metrics |= cluster_metrics(model[:-1].transform(train[cols]), labels, "train_own")
+        # Si usamos GMM o Birch, manejamos el transform de manera segura
+        if role == "candidate-gmm":
+            metrics |= cluster_metrics(scaler_gmm.transform(train[cols]), labels, "train_own")
+        else:
+            metrics |= cluster_metrics(model[:-1].transform(train[cols]), labels, "train_own")
+            
         metrics["test_stability_ari"] = stability
         metrics["train_min_cluster_size"] = int(np.bincount(labels).min())
         mlflow.log_metrics(metrics | extra_metrics)
-        log_figure(
-            plots.plot_cluster_map,
-            "p3_mapa_grupos.png",
-            train,
-            labels,
-            title=f"P3 - {run_name}: estaciones por grupo",
-        )
-        log_figure(
-            plots.plot_cluster_profiles,
-            "p3_perfiles_grupos.png",
-            train,
-            labels,
-            title=f"P3 - {run_name}: perfil horario medio por grupo",
-        )
+        
+        log_figure(plots.plot_cluster_map, "p3_mapa_grupos.png", train, labels, title=f"P3 - {run_name}")
+        log_figure(plots.plot_cluster_profiles, "p3_perfiles_grupos.png", train, labels, title=f"P3 - {run_name}")
         if k_curve:
-            log_figure(
-                plots.plot_k_selection,
-                "p3_seleccion_k.png",
-                list(k_curve),
-                list(k_curve.values()),
-                k,
-            )
+            log_figure(plots.plot_k_selection, "p3_seleccion_k.png", list(k_curve), list(k_curve.values()), k)
+            
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "p3_asignacion_estaciones.csv"
-            train[["station_id", "name", "municipio", "latitude", "longitude"]].assign(
-                cluster=labels
-            ).to_csv(path, index=False)
+            train[["station_id", "name", "municipio", "latitude", "longitude"]].assign(cluster=labels).to_csv(path, index=False)
             mlflow.log_artifact(str(path))
         log_json(metrics, "metrics.json")
-    logger.success(
-        f"{run_name}: k={k}, train_profile_silhouette={metrics['train_profile_silhouette']:.3f}"
-    )
+    logger.success(f"{run_name}: k={k}, train_profile_silhouette={metrics['train_profile_silhouette']:.3f}")
 
 
 # ---------------------------------------------------------------------------
