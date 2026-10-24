@@ -37,6 +37,29 @@ def plot_daily_forecast(dates: pd.Series, y_true, y_pred, title: str, path: Path
     return _save(fig, path)
 
 
+def plot_regression_diagnostics(y_true, y_pred, title: str, path: Path) -> Path:
+    """P1: real contra predicho y residuales contra predicho, por estación y día."""
+    y_true, y_pred = np.asarray(y_true, float), np.asarray(y_pred, float)
+    residuals = y_true - y_pred
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
+    lim = float(np.percentile(np.r_[y_true, y_pred], 99.5))
+    axes[0].scatter(y_pred, y_true, s=4, alpha=0.15, color=PALETTE[0], rasterized=True)
+    axes[0].plot(
+        [0, lim], [0, lim], color=PALETTE[1], ls="--", lw=1.2, label="Predicción perfecta"
+    )
+    axes[0].set(xlim=(0, lim), ylim=(0, lim), xlabel="Predicho", ylabel="Real")
+    axes[0].set_title("Real contra predicho")
+    axes[0].legend()
+    axes[1].scatter(y_pred, residuals, s=4, alpha=0.15, color=PALETTE[2], rasterized=True)
+    axes[1].axhline(0, color=PALETTE[1], ls="--", lw=1.2)
+    axes[1].set(xlim=(0, lim), xlabel="Predicho", ylabel="Residual (real - predicho)")
+    axes[1].set_title(f"Residuales (media {residuals.mean():.2f})")
+    for ax in axes:
+        ax.grid(alpha=0.3)
+    fig.suptitle(title)
+    return _save(fig, path)
+
+
 def plot_classification(y_true, y_score, y_pred, title: str, path: Path) -> Path:
     """P2: curva precisión-exhaustividad y matriz de confusión."""
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))

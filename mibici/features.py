@@ -246,9 +246,22 @@ def time_block(ts: pd.Series) -> pd.Series:
 
 
 def block_start(ts: pd.Series) -> pd.Series:
-    """Marca de tiempo del inicio del bloque al que pertenece cada viaje."""
-    hours = P2_FIRST_HOUR + time_block(ts).astype("int64") * P2_BLOCK_HOURS
-    return ts.dt.normalize() + pd.to_timedelta(hours, unit="h")
+    """Asigna cada viaje al inicio de su bloque de 3 horas.
+
+    Los viajes anteriores a las 06:00 quedan fuera de los bloques
+    analizados por P2, que cubren de las 06:00 a las 24:00.
+    """
+    hours = ts.dt.hour
+    valid = hours >= P2_FIRST_HOUR
+
+    block = (hours.clip(lower=P2_FIRST_HOUR) - P2_FIRST_HOUR) // P2_BLOCK_HOURS
+
+    start = ts.dt.normalize() + pd.to_timedelta(
+        P2_FIRST_HOUR + block * P2_BLOCK_HOURS,
+        unit="h",
+    )
+
+    return start.where(valid)
 
 
 def risk_label(net_flow: pd.Series, capacity: pd.Series) -> pd.DataFrame:

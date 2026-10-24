@@ -15,7 +15,10 @@ Pasos de ``ingest``:
 4. Guarda un Parquet por mes en ``data/interim/trips/`` y las estaciones en
    ``data/interim/stations.parquet``.
 5. Escribe ``data/manifest.json`` (versionado en Git) con el hash SHA-256 y el número de
-   registros de cada archivo, y una ``data_version`` que se registra en MLflow.
+   registros de cada archivo, y una ``data_version`` que se registra en MLflow. Si la
+   ``data_version`` cambia respecto al manifiesto anterior, lo avisa (o falla con ``--strict``).
+
+``verify`` compara los CSV crudos por hash exacto y los Parquet limpios por contenido.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ import unicodedata
 
 from loguru import logger
 import pandas as pd
+import pyarrow.parquet as pq
 import requests
 from tqdm import tqdm
 import typer
@@ -96,6 +100,20 @@ def sha256_file(path: Path) -> str:
     with open(path, "rb") as fh:
         for block in iter(lambda: fh.read(CHUNK_BYTES), b""):
             digest.update(block)
+    return digest.hexdigest()
+
+
+def content_sha256(path: Path) -> str:
+    """Hash SHA-256 del contenido de un Parquet (columnas, número de filas y valores).
+
+    Los bytes de un Parquet dependen del entorno que lo escribe (por ejemplo, si el texto se
+    guarda como ``str`` u ``object``, o la compresión), aunque los datos sean los mismos; este
+    hash solo depende de los datos.
+    """
+    df = pd.read_parquet(path)
+    digest = hashlib.sha256()
+    digest.update(json.dumps([list(df.columns), len(df)]).encode("utf-8"))
+    digest.update(pd.util.hash_pandas_object(df, index=False).to_numpy().tobytes())
     return digest.hexdigest()
 
 
@@ -334,6 +352,9 @@ def ingest(
     start: str = typer.Option(DATE_START, help="Primer mes (AAAA-MM)."),
     end: str = typer.Option(DATE_END, help="Último mes (AAAA-MM)."),
     force: bool = typer.Option(False, help="Volver a descargar y procesar todo."),
+    strict: bool = typer.Option(
+        False, help="Fallar sin sobrescribir el manifiesto si la data_version cambia."
+    ),
 ):
     """Descarga, normaliza, guarda en Parquet y versiona los datos de MiBici."""
     previous = load_manifest()
@@ -372,6 +393,7 @@ def ingest(
                 "raw_sha256": sha256_file(raw_path),
                 "clean_path": relative(clean_path),
                 "clean_sha256": sha256_file(clean_path),
+                "clean_content_sha256": content_sha256(clean_path),
                 **stats,
             }
         )
@@ -392,6 +414,7 @@ def ingest(
             "raw_sha256": sha256_file(raw_path),
             "clean_path": relative(STATIONS_INTERIM_PATH),
             "clean_sha256": sha256_file(STATIONS_INTERIM_PATH),
+            "clean_content_sha256": content_sha256(STATIONS_INTERIM_PATH),
             "rows_raw": len(raw_stations),
             "rows_clean": len(stations),
         }
@@ -415,6 +438,19 @@ def ingest(
         },
         "files": entries,
     }
+    if previous and previous.get("data_version") != manifest["data_version"]:
+        before = {e["file"]: e["raw_sha256"] for e in previous.get("files", [])}
+        after = {e["file"]: e["raw_sha256"] for e in entries}
+        changed = sorted(f for f in before.keys() | after.keys() if before.get(f) != after.get(f))
+        message = (
+            f"La data_version cambia de {previous.get('data_version')} a "
+            f"{manifest['data_version']}. CSV distintos, nuevos o ausentes: "
+            f"{changed or 'ninguno (cambiaron las reglas de limpieza o las filas limpias)'}"
+        )
+        if strict:
+            logger.error(f"{message}. No se sobrescribe el manifiesto (--strict).")
+            raise typer.Exit(code=1)
+        logger.warning(message)
     if previous.get("data_version") == manifest["data_version"]:
         manifest["generated_at"] = previous["generated_at"]  # mismo contenido, mismo manifiesto
     DATA_MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -429,20 +465,44 @@ def ingest(
 
 @app.command()
 def verify():
-    """Comprueba que los archivos locales coinciden con los hashes del manifiesto."""
+    """Comprueba que los archivos locales coinciden con el manifiesto.
+
+    Los CSV crudos se comparan por hash exacto de sus bytes. Los Parquet limpios se comparan
+    por contenido (``clean_content_sha256``), porque sus bytes cambian entre entornos aunque
+    los datos sean idénticos. Si el manifiesto no tiene ese campo, se compara el número de
+    filas.
+    """
     manifest = load_manifest()
     if not manifest:
         raise typer.Exit(code=1)
     problems = 0
+    without_content_hash = 0
     for entry in tqdm(manifest["files"], desc="Verificando"):
-        for key in ("raw", "clean"):
-            path = PROJ_ROOT / entry[f"{key}_path"]
+        raw_path = PROJ_ROOT / entry["raw_path"]
+        clean_path = PROJ_ROOT / entry["clean_path"]
+        for path in (raw_path, clean_path):
             if not path.exists():
                 logger.error(f"Falta {path}")
                 problems += 1
-            elif sha256_file(path) != entry[f"{key}_sha256"]:
-                logger.error(f"Hash distinto en {path}")
+        if raw_path.exists() and sha256_file(raw_path) != entry["raw_sha256"]:
+            logger.error(f"Hash distinto en {raw_path}")
+            problems += 1
+        if not clean_path.exists():
+            continue
+        if "clean_content_sha256" in entry:
+            if content_sha256(clean_path) != entry["clean_content_sha256"]:
+                logger.error(f"Contenido distinto en {clean_path}")
                 problems += 1
+        else:
+            without_content_hash += 1
+            if pq.read_metadata(clean_path).num_rows != entry["rows_clean"]:
+                logger.error(f"Número de filas distinto en {clean_path}")
+                problems += 1
+    if without_content_hash:
+        logger.warning(
+            f"{without_content_hash} archivos sin clean_content_sha256 en el manifiesto: solo se "
+            "comparó el número de filas. Regenera el manifiesto con: python -m mibici.dataset ingest"
+        )
     if problems:
         logger.error(f"{problems} problemas encontrados")
         raise typer.Exit(code=1)

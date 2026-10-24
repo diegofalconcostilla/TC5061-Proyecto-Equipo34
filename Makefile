@@ -6,6 +6,14 @@ PROJECT_NAME = TC5061-Proyecto-Equipo34
 PYTHON_VERSION = 3.12
 PYTHON_INTERPRETER = python
 
+# MLflow: el puerto 5000 lo ocupa AirPlay en macOS.
+MLFLOW_PORT ?= 5001
+export MLFLOW_TRACKING_URI ?= http://127.0.0.1:$(MLFLOW_PORT)
+# Entorno de mlflow run: uv (aislado, desde python_env.yaml) o local (el entorno activo).
+ENV_MANAGER ?= uv
+ALIAS ?= champion
+MLFLOW_RUN = mlflow run . --env-manager $(ENV_MANAGER) --experiment-name mibici-equipo34
+
 #################################################################################
 # COMMANDS                                                                      #
 #################################################################################
@@ -54,19 +62,6 @@ create_environment:
 	@echo ">>> New virtualenv created. Activate with:\nworkon $(PROJECT_NAME)"
 	
 
-
-
-#################################################################################
-# PROJECT RULES                                                                 #
-#################################################################################
-
-
-## Make dataset
-.PHONY: data
-data: requirements
-	$(PYTHON_INTERPRETER) mibici/dataset.py
-
-
 #################################################################################
 # Self Documenting Commands                                                     #
 #################################################################################
@@ -91,7 +86,17 @@ help:
 #################################################################################
 
 
-## Descargar, limpiar y versionar los datos de MiBici
+## Levantar el servidor de tracking (SQLite + artefactos en ./mlartifacts)
+.PHONY: mlflow-server
+mlflow-server:
+	mlflow server --backend-store-uri sqlite:///mlflow.db --port $(MLFLOW_PORT)
+
+## Ingesta y features desde el MLflow Project
+.PHONY: ingest
+ingest:
+	$(MLFLOW_RUN) -e ingest
+
+## (desarrollo) Descargar, limpiar y versionar los datos sin mlflow run
 .PHONY: data
 data:
 	$(PYTHON_INTERPRETER) -m mibici.dataset ingest
@@ -101,21 +106,36 @@ data:
 verify:
 	$(PYTHON_INTERPRETER) -m mibici.dataset verify
 
-## Construir los datasets de P1, P2 y P3
+## (desarrollo) Construir los datasets de P1, P2 y P3 sin mlflow run
 .PHONY: features
 features:
 	$(PYTHON_INTERPRETER) -m mibici.features
 
-## Ejecutar el experimento base y registrarlo en MLflow
+## Entrenar un modelo con mlflow run: make train Q=p1 M=hgb P="learning_rate=0.1"
 .PHONY: train
 train:
-	$(PYTHON_INTERPRETER) -m mibici.modeling.train
+	$(MLFLOW_RUN) -e train -P question=$(Q) -P model=$(M) -P params="$(P)"
 
-## Abrir la interfaz de MLflow
-.PHONY: mlflow-ui
-mlflow-ui:
-	mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
+## Búsqueda con nested runs: make search Q=p1 M=hgb G="learning_rate=0.03|0.1;max_iter=300|500"
+.PHONY: search
+search:
+	$(MLFLOW_RUN) -e search -P question=$(Q) -P model=$(M) -P grid="$(G)" -P params="$(P)"
 
-## Pipeline completo: datos -> features -> experimento
+## Registrar y asignar alias: make register Q=p1 [RUN="nombre del run"] [ALIAS=champion]
+.PHONY: register
+register:
+	$(MLFLOW_RUN) -e register -P question=$(Q) -P run_name="$(RUN)" -P alias=$(ALIAS)
+
+## Predecir test con el modelo registrado: make predict Q=p1 [ALIAS=champion]
+.PHONY: predict
+predict:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.predict --question $(Q) --alias $(ALIAS)
+
+## Todos los experimentos y el registro de champions (scripts/run_experiments.sh)
+.PHONY: experiments
+experiments:
+	bash scripts/run_experiments.sh
+
+## Corrida oficial desde un clon limpio: ingesta -> experimentos -> registro
 .PHONY: all
-all: data features train
+all: ingest experiments
