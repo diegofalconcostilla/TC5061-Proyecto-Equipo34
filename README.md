@@ -45,6 +45,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   ├── raw/               <- CSV originales del portal (no versionado)
 │   ├── interim/           <- Parquet limpio por mes y estaciones (no versionado)
 │   └── processed/         <- datasets de P1, P2 y P3 (no versionado)
+├── docs/                  <- propuesta (entrega 1) y reporte de MLflow (entrega 2) en PDF
 ├── models/                <- modelos serializados (no versionado)
 ├── notebooks
 │   └── 1.0-dfc-exploracion-mibici.ipynb   <- exploración (solo análisis)
@@ -108,6 +109,16 @@ make register Q=p1                                             # mlflow run . -e
 make predict Q=p1                                              # predicciones de test con el champion
 ```
 
+**Sin `make` (Windows con Git Bash).** Los mismos pasos con `mlflow run` directo; el script lee `MLFLOW_TRACKING_URI` y `ENV_MANAGER` igual que el Makefile:
+
+```bash
+mlflow server --backend-store-uri sqlite:///mlflow.db --port 5001     # terminal 1
+export MLFLOW_TRACKING_URI=http://127.0.0.1:5001                      # terminal 2
+mlflow run . -e ingest --env-manager uv --experiment-name mibici-equipo34
+bash scripts/run_experiments.sh                                       # experimentos y registro
+mlflow run . -e train -P question=p1 -P model=hgb -P params="learning_rate=0.1" --env-manager uv --experiment-name mibici-equipo34
+```
+
 Por defecto `mlflow run` crea un entorno aislado con `uv` desde `python_env.yaml`. Durante el desarrollo, `ENV_MANAGER=local` usa el entorno activo y es más rápido: `make train ENV_MANAGER=local Q=p2 M=logistica`. Sin `make`, los mismos comandos `mlflow run` funcionan con `--experiment-name mibici-equipo34`.
 
 Si la ingesta produce la misma `data_version` (`efa3a16661ec`), los datos crudos son idénticos a los del experimento reportado. Cada run registra además `train_data_hash`, el hash del dataset de entrenamiento ya construido, porque un cambio en `features.py` modifica los datasets aunque `data_version` no cambie.
@@ -135,6 +146,16 @@ Un modelo registrado por pregunta: `mibici-equipo34-p1-demanda`, `mibici-equipo3
 
 Se usan **aliases** en lugar de stages (MLflow marcó los stages como obsoletos): `champion` es la versión en uso y `challenger` la alternativa en evaluación. `make register Q=p2` elige el mejor run `candidate` o `search` con modelo según la métrica de validación de `SELECTION_METRIC` en `config.py` (P1 `valid_wape`, P2 `valid_pr_auc`, P3 `train_profile_silhouette`); `make register Q=p2 RUN=<run_name> ALIAS=challenger` fija uno concreto. Después de asignar el alias, el registro carga `models:/<nombre>@<alias>` y predice el ejemplo de entrada; si falla, el registro falla.
 
+Versiones en producción (corrida oficial; justificación en [`docs/TC5061_Reporte_MLFlow_Equipo34.pdf`](docs/TC5061_Reporte_MLFlow_Equipo34.pdf)):
+
+| Modelo registrado | `@champion` | `@challenger` |
+|---|---|---|
+| `mibici-equipo34-p1-demanda` | v1 · `p1-hgb-regressor-lags-calendario[learning_rate=0.1]` | v2 · `p1-random-forest-lags-calendario` |
+| `mibici-equipo34-p2-riesgo` | v1 · `p2-hgb-classifier-flujos-lag[learning_rate=0.1]` | v2 · `p2-random-forest-flujos-lag` |
+| `mibici-equipo34-p3-grupos` | v1 · `p3-kmeans-perfiles-uso` (k = 3) | v2 · `p3-birch-perfiles-uso` |
+
+En P1 y P2 el champion es la mejor candidata por la métrica de validación y el challenger, la mejor de otra familia. En P3 la mejor silueta es de la mezcla gaussiana, pero su asignación es inestable entre periodos (ARI 0.30 con covarianza diagonal y 0.01 con completa), así que `scripts/run_experiments.sh` fija el champion en KMeans k = 3 (ARI 0.45) y el challenger en Birch (ARI 0.53).
+
 ### Cómo agregar un modelo
 
 1. En `mibici/config.py`, agrega sus hiperparámetros por defecto en `P1_MODEL_PARAMS` (o P2, P3).
@@ -144,24 +165,33 @@ Se usan **aliases** en lugar de stages (MLflow marcó los stages como obsoletos)
 
 Los runs, artefactos, etiquetas y el registro funcionan sin más cambios.
 
-### Experimento base
+### Resultados
 
-Experimento `mibici-equipo34`: por pregunta, baselines sencillos, un modelo lineal (P1 y P2) y el candidato de la primera entrega, para medir cuánto aporta cada nivel de complejidad. Métricas en prueba (mayo a agosto de 2026):
+Experimento `mibici-equipo34`, corrida oficial (64 runs con el mismo commit y `git_dirty=false`). Por pregunta: baselines, candidatas de varias familias y búsquedas con nested runs. Métricas de validación (selección) y de prueba (mayo a agosto de 2026); tablas completas en el reporte.
 
-| Pregunta | Run | Resultado |
-|---|---|---|
-| P1 | `p1-baseline-historico-estacion-dia-semana` | test_mae 8.11 · test_wape 0.298 · test_r2 0.711 |
-| P1 | `p1-baseline-media-movil-7d` | test_mae 7.14 · test_wape 0.262 · test_r2 0.838 |
-| P1 | `p1-baseline-naive-estacional-7d` | test_mae 7.12 · test_wape 0.261 · test_r2 0.794 |
-| P1 | `p1-poisson-lineal-lags-calendario` | test_mae 6.00 · test_wape 0.220 · test_r2 0.862 |
-| P1 | `p1-hgb-regressor-lags-calendario` | test_mae 5.30 · test_wape 0.194 · test_r2 0.893 |
-| P2 | `p2-baseline-tasa-historica-estacion-bloque` | test_pr_auc 0.315 · test_f1 0.335 · test_recall 0.434 |
-| P2 | `p2-baseline-persistencia-semanal` | test_pr_auc 0.388 · test_f1 0.350 · test_recall 0.350 |
-| P2 | `p2-logistica-flujos-lag` | test_pr_auc 0.405 · test_f1 0.414 · test_recall 0.445 |
-| P2 | `p2-hgb-classifier-flujos-lag` | test_pr_auc 0.464 · test_f1 0.445 · test_recall 0.421 |
-| P3 | `p3-baseline-kmeans-geografico` | train_profile_silhouette -0.014 (k = 6) |
-| P3 | `p3-baseline-regla-manana-tarde` | train_profile_silhouette 0.051 (3 grupos) · test_stability_ari 0.271 |
-| P3 | `p3-kmeans-perfiles-uso` | train_profile_silhouette 0.142 (k = 3) · test_stability_ari 0.446 |
+| Pregunta | Run | Validación | Prueba |
+|---|---|---|---|
+| P1 | `p1-baseline-naive-estacional-7d` (baseline) | wape 0.258 | mae 7.12 · wape 0.261 |
+| P1 | `p1-baseline-media-movil-7d` (baseline) | wape 0.270 | mae 7.14 · wape 0.262 |
+| P1 | `p1-baseline-historico-estacion-dia-semana` (baseline) | wape 0.242 | mae 8.11 · wape 0.298 |
+| P1 | `p1-poisson-lineal-lags-calendario[alpha=0.1]` (mejor lineal) | wape 0.197 | mae 5.97 · wape 0.219 |
+| P1 | `p1-ridge-lags-calendario` | wape 0.214 | mae 6.36 · wape 0.233 |
+| P1 | `p1-random-forest-lags-calendario` (challenger) | wape 0.180 | mae 5.40 · wape 0.198 |
+| P1 | `p1-hgb-regressor-lags-calendario[loss=squared_error]` | wape 0.179 | mae 5.41 · wape 0.198 |
+| P1 | **`p1-hgb-regressor-lags-calendario[learning_rate=0.1]` (champion)** | **wape 0.176** | **mae 5.33 · wape 0.196** |
+| P2 | `p2-baseline-persistencia-semanal` (baseline) | pr_auc 0.397 | pr_auc 0.388 · f1 0.350 |
+| P2 | `p2-baseline-tasa-historica-estacion-bloque` (baseline) | pr_auc 0.376 | pr_auc 0.315 · f1 0.335 |
+| P2 | `p2-logistica-flujos-lag` | pr_auc 0.405 | pr_auc 0.405 · f1 0.414 |
+| P2 | `p2-random-forest-flujos-lag` (challenger) | pr_auc 0.452 | pr_auc 0.443 · f1 0.431 |
+| P2 | **`p2-hgb-classifier-flujos-lag[learning_rate=0.1]` (champion)** | **pr_auc 0.483** | **pr_auc 0.462 · f1 0.442 · recall 0.454** |
+| P3 | `p3-baseline-kmeans-geografico` (baseline) | silueta -0.014 | — |
+| P3 | `p3-baseline-regla-manana-tarde` (baseline) | silueta 0.051 | ari 0.271 |
+| P3 | `p3-minibatch-kmeans-perfiles-uso` | silueta 0.086 | ari 0.470 |
+| P3 | `p3-birch-perfiles-uso` (challenger) | silueta 0.122 | ari 0.532 |
+| P3 | `p3-gaussian-mixture-perfiles-uso[covariance_type=diag]` | silueta 0.160 | ari 0.305 |
+| P3 | **`p3-kmeans-perfiles-uso` (champion, k = 3)** | **silueta 0.142** | **ari 0.446** |
+
+En P3 la "validación" es la silueta en el espacio de perfiles de entrenamiento y la columna de prueba es el ARI de estabilidad entre los perfiles de entrenamiento y los de 2026.
 
 El baseline histórico de P1 es el mejor de los tres baselines en validación (MAE 7.42 frente a 7.91 y 8.27) y el peor en prueba: el promedio de 2024-2025 representa cada vez peor la demanda de 2026 (deriva). El ARI del baseline geográfico de P3 es 1.0 por construcción (las coordenadas no cambian entre periodos), por eso no se reporta como estabilidad.
 
