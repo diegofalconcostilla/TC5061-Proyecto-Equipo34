@@ -599,8 +599,8 @@
       "raw_bytes": 40841,
       "raw_sha256": "206e45fe633922b634d858142fa21e6fd9f4c421b6435c02980ef290cc2df90d",
       "clean_path": "data/interim/stations.parquet",
-      "clean_sha256": "a488f10105450a3963f06d6a48fb33f45819103cd0336fd67644d791342afc5d",
-      "clean_content_sha256": "a8fb116b2091e407f6481e1a14f9178dffc3c90378ab2c99ac58cfc1d3ee24bd",
+      "clean_sha256": "5a3dfe3df9470fcf47d60d3acab91745704b90e87045b8b6135b4776748868ad",
+      "clean_content_sha256": "36a789ca46bca7568827cf148f4caf2e9ff4caefde59380e546b44c99e7c8cbd",
       "rows_raw": 484,
       "rows_clean": 484
     }
