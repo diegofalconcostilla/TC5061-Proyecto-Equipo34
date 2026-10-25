@@ -6,8 +6,8 @@ from loguru import logger
 import mlflow
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.linear_model import PoissonRegressor
+from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
+from sklearn.linear_model import PoissonRegressor, Ridge
 from sklearn.metrics import (
     mean_absolute_error,
     r2_score,
@@ -153,12 +153,52 @@ def p1_hgb(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
     )
 
 
+def p1_ridge(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
+    numeric = [c for c in P1_FEATURES if c not in P1_CATEGORICAL]
+    model = make_pipeline(linear_preprocessor(P1_CATEGORICAL, numeric), Ridge(**hp))
+    model.fit(parts["train"][P1_FEATURES], parts["train"]["departures"])
+    return ModelResult(
+        "p1-ridge-lags-calendario",
+        "P1 modelo lineal: regresión Ridge (error cuadrático) con las variables del candidato "
+        "y calendario en one-hot; contraste con el enlace logarítmico de Poisson.",
+        {
+            "model_class": "Ridge",
+            "features": ",".join(P1_FEATURES),
+            "encoding": f"onehot({','.join(P1_CATEGORICAL)})+standard",
+            **{f"hp_{k}": v for k, v in hp.items()},
+        },
+        {s: model.predict(parts[s][P1_FEATURES]) for s in ("valid", "test")},
+        estimator=model,
+        features=P1_FEATURES,
+    )
+
+
+def p1_random_forest(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
+    model = RandomForestRegressor(random_state=SEED, n_jobs=-1, **hp)
+    model.fit(parts["train"][P1_FEATURES], parts["train"]["departures"])
+    return ModelResult(
+        "p1-random-forest-lags-calendario",
+        "P1 candidato: RandomForestRegressor con lags y calendario (bagging frente al "
+        "boosting del HGB).",
+        {
+            "model_class": "RandomForestRegressor",
+            "features": ",".join(P1_FEATURES),
+            **{f"hp_{k}": v for k, v in hp.items()},
+        },
+        {s: model.predict(parts[s][P1_FEATURES]) for s in ("valid", "test")},
+        estimator=model,
+        features=P1_FEATURES,
+    )
+
+
 P1_MODELS: dict[str, ModelSpec] = {
     "baseline": ModelSpec(p1_seasonal_naive, "naive", "baseline"),
     "roll7": ModelSpec(p1_rolling_mean_7d, "naive", "baseline"),
     "historico": ModelSpec(p1_station_weekday_mean, "historical", "baseline"),
     "poisson": ModelSpec(p1_poisson_glm, "linear", "candidate", P1_MODEL_PARAMS["poisson"]),
     "hgb": ModelSpec(p1_hgb, "boosting", "candidate", P1_MODEL_PARAMS["hgb"]),
+    "ridge": ModelSpec(p1_ridge, "linear", "candidate", P1_MODEL_PARAMS["ridge"]),
+    "rf": ModelSpec(p1_random_forest, "bagging", "candidate", P1_MODEL_PARAMS["rf"]),
 }
 
 
