@@ -2,7 +2,7 @@ import pytest
 
 from mibici.config import P1_MODEL_PARAMS, P2_MODEL_PARAMS, P3_MODEL_PARAMS
 from mibici.modeling.common import run_name_with_changes
-from mibici.modeling.params import expand_grid, resolve_params
+from mibici.modeling.params import cli_text, expand_grid, resolve_params
 from mibici.modeling.search import combine
 from mibici.modeling.train import MODELS
 
@@ -72,3 +72,11 @@ def test_invalid_grid_is_rejected(grid):
 def test_combination_overrides_fixed_params():
     hp = resolve_params(DEFAULTS, combine("max_iter=100,learning_rate=0.2", "learning_rate=0.1"))
     assert hp["max_iter"] == 100 and hp["learning_rate"] == 0.1
+
+
+def test_cli_text_quita_comillas_de_valor_vacio():
+    # En Windows, mlflow run pasa un parámetro vacío como "" literal.
+    assert cli_text('""') == ""
+    assert cli_text("''") == ""
+    assert cli_text('"alpha=0.1"') == "alpha=0.1"
+    assert cli_text("alpha=0.1") == "alpha=0.1"

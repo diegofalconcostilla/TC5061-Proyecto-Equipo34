@@ -20,6 +20,7 @@ import typer
 from mibici.modeling.p1 import P1_MODELS, run_p1
 from mibici.modeling.p2 import P2_MODELS, run_p2
 from mibici.modeling.p3 import P3_MODELS, run_p3
+from mibici.modeling.params import cli_text
 from mibici.modeling.tracking import STAGES, setup_mlflow
 
 app = typer.Typer(help="Entrena un modelo de MiBici y lo registra en MLflow.")
@@ -41,7 +42,7 @@ def main(
     ),
 ):
     """Entrena un modelo y registra parámetros, métricas y artefactos en un run."""
-    question = question.lower()
+    question, params, stage = question.lower(), cli_text(params), cli_text(stage)
     if question not in RUNNERS:
         raise typer.BadParameter(f"question debe ser p1, p2 o p3, no {question!r}")
     setup_mlflow()
