@@ -55,8 +55,14 @@ train p3 gmm
 search p3 kmeans "n_clusters=3|4|5|6|7|8;n_init=10|20"
 search p3 gmm "n_clusters=3|4|5;covariance_type=full|diag"
 
-# --- Registro: mejor candidata por pregunta como champion -----------------------------------
-# Para fijar un run concreto: register p1 "<run_name>"; para un challenger: register p1 "<run_name>" challenger
+# --- Registro: champion y challenger por pregunta (justificación en el reporte) -------------
+# Sin run_name, register elige la mejor candidata por SELECTION_METRIC (validación).
+# P1 y P2: champion = mejor por métrica; challenger = mejor de otra familia (bagging).
 register p1
+register p1 "p1-random-forest-lags-calendario" challenger
 register p2
-register p3
+register p2 "p2-random-forest-flujos-lag" challenger
+# P3: la mejor silueta (GMM) es inestable entre periodos (ARI 0.30 frente a 0.45 de KMeans), así
+# que el champion se fija en KMeans k = 3; Birch, el más estable (ARI 0.53), es el challenger.
+register p3 "p3-kmeans-perfiles-uso"
+register p3 "p3-birch-perfiles-uso" challenger
