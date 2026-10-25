@@ -15,27 +15,28 @@ train() { make --no-print-directory train Q="$1" M="$2" P="${3:-}"; }
 search() { make --no-print-directory search Q="$1" M="$2" G="$3" P="${4:-}"; }
 register() { make --no-print-directory register Q="$1" RUN="${2:-}" ALIAS="${3:-champion}"; }
 
-# --- P1: demanda diaria por estación (selección: valid_wape, menor es mejor) ----------------
+# --- P1: demanda diaria ---
 train p1 baseline
 train p1 roll7
 train p1 historico
 train p1 poisson
 train p1 hgb
-# Candidatas y búsqueda de P1:
+search p1 poisson "alpha=0.0001|0.01|0.1"
+search p1 hgb "learning_rate=0.03|0.1;max_leaf_nodes=31|63"
 
-# --- P2: riesgo de desbalance por bloque de 3 h (selección: valid_pr_auc, mayor es mejor) ---
+# --- P2: riesgo por bloque de 3 horas ---
 train p2 baseline
 train p2 tasa
 train p2 logistica
 train p2 hgb
-# Candidatas y búsqueda de P2:
+search p2 logistica "C=0.1|1.0|10.0"
+search p2 hgb "learning_rate=0.03|0.1;max_leaf_nodes=31|63"
 
-# --- P3: grupos de estaciones por perfil de uso (selección: train_profile_silhouette) -------
+# --- P3: grupos de estaciones ---
 train p3 baseline
 train p3 regla
 train p3 kmeans
-search p3 kmeans "n_clusters=3|4|5;n_init=10|20"
-# Candidatas y búsqueda de P3:
+search p3 kmeans "n_clusters=3|4|5|6|7|8;n_init=10|20"
 
 # --- Registro: mejor candidata por pregunta como champion -----------------------------------
 # Para fijar un run concreto: register p1 "<run_name>"; para un challenger: register p1 "<run_name>" challenger
