@@ -6,7 +6,7 @@ from loguru import logger
 import mlflow
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     average_precision_score,
@@ -205,11 +205,34 @@ def p2_hgb(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
     )
 
 
+def p2_random_forest(parts: dict[str, pd.DataFrame], hp: dict) -> ModelResult:
+    model = RandomForestClassifier(random_state=SEED, n_jobs=-1, **hp)
+    model.fit(parts["train"][P2_FEATURES], parts["train"]["risk"])
+    scores = {s: model.predict_proba(parts[s][P2_FEATURES])[:, 1] for s in ("valid", "test")}
+    decision, labels = threshold_on_valid(parts, scores)
+    return ModelResult(
+        "p2-random-forest-flujos-lag",
+        "P2 candidato: RandomForestClassifier balanceado (bagging frente al boosting del HGB); "
+        "umbral elegido en validación maximizando F1.",
+        {
+            "model_class": "RandomForestClassifier",
+            "features": ",".join(P2_FEATURES),
+            **{f"hp_{k}": v for k, v in hp.items()},
+            "decision_threshold": round(decision, 4),
+        },
+        scores,
+        labels,
+        estimator=ThresholdClassifier(model, decision),
+        features=P2_FEATURES,
+    )
+
+
 P2_MODELS: dict[str, ModelSpec] = {
     "baseline": ModelSpec(p2_weekly_persistence, "naive", "baseline"),
     "tasa": ModelSpec(p2_historical_rate, "historical", "baseline"),
     "logistica": ModelSpec(p2_logistic, "linear", "candidate", P2_MODEL_PARAMS["logistica"]),
     "hgb": ModelSpec(p2_hgb, "boosting", "candidate", P2_MODEL_PARAMS["hgb"]),
+    "rf": ModelSpec(p2_random_forest, "bagging", "candidate", P2_MODEL_PARAMS["rf"]),
 }
 
 

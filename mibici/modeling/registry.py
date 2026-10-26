@@ -24,6 +24,7 @@ from mibici.config import (
     TEAM,
 )
 from mibici.modeling.artifacts import MODEL_NAME
+from mibici.modeling.params import cli_text
 from mibici.modeling.tracking import git_info, setup_mlflow
 
 app = typer.Typer(help="Registra un modelo en el Model Registry y le asigna un alias.")
@@ -113,7 +114,7 @@ def main(
     alias: str = typer.Option("champion", help="Alias de la versión (champion, challenger)."),
 ):
     """Registra el modelo del run elegido, documenta su linaje y le asigna el alias."""
-    question = question.lower()
+    question, run_name, alias = question.lower(), cli_text(run_name), cli_text(alias)
     if question not in REGISTERED_MODEL_NAMES:
         raise typer.BadParameter(f"question debe ser p1, p2 o p3, no {question!r}")
     setup_mlflow()

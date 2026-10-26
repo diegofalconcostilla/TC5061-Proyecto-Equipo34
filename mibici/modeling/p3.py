@@ -9,13 +9,14 @@ from loguru import logger
 import mlflow
 import numpy as np
 import pandas as pd
-from sklearn.cluster import KMeans
+from sklearn.cluster import Birch, KMeans, MiniBatchKMeans
 from sklearn.metrics import (
     adjusted_rand_score,
     calinski_harabasz_score,
     davies_bouldin_score,
     silhouette_score,
 )
+from sklearn.mixture import GaussianMixture
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -162,10 +163,79 @@ def p3_profile_kmeans(train: pd.DataFrame, x_profile: np.ndarray, hp: dict) -> P
     )
 
 
+def p3_profile_clustering(
+    train: pd.DataFrame, estimator, run_name: str, description: str, hp: dict
+) -> P3Result:
+    """Agrupa los perfiles de uso (mismas variables que el KMeans candidato) con ``estimator``."""
+    cols = p3_feature_columns(train)
+    model = make_pipeline(StandardScaler(), estimator)
+    labels = model.fit_predict(train[cols])
+    return P3Result(
+        run_name,
+        description,
+        {
+            "model_class": type(estimator).__name__,
+            "features": "perfil_horario_48+volumen+balance+duracion",
+            "n_features": len(cols),
+            **{f"hp_{key}": v for key, v in hp.items()},
+        },
+        labels,
+        lambda df: model.predict(df[cols]),
+        model[:-1].transform(train[cols]),
+        estimator=model,
+        features=cols,
+    )
+
+
+def p3_minibatch_kmeans(train: pd.DataFrame, x_profile: np.ndarray, hp: dict) -> P3Result:
+    return p3_profile_clustering(
+        train,
+        MiniBatchKMeans(
+            hp["n_clusters"], n_init=hp["n_init"], batch_size=hp["batch_size"], random_state=SEED
+        ),
+        "p3-minibatch-kmeans-perfiles-uso",
+        "P3 candidato: MiniBatchKMeans sobre perfiles de uso (KMeans aproximado por lotes, "
+        "más barato de entrenar).",
+        hp,
+    )
+
+
+def p3_birch(train: pd.DataFrame, x_profile: np.ndarray, hp: dict) -> P3Result:
+    return p3_profile_clustering(
+        train,
+        Birch(n_clusters=hp["n_clusters"], threshold=hp["threshold"]),
+        "p3-birch-perfiles-uso",
+        "P3 candidato: Birch (árbol de características y agrupamiento jerárquico) sobre "
+        "perfiles de uso.",
+        hp,
+    )
+
+
+def p3_gaussian_mixture(train: pd.DataFrame, x_profile: np.ndarray, hp: dict) -> P3Result:
+    return p3_profile_clustering(
+        train,
+        GaussianMixture(
+            hp["n_clusters"],
+            covariance_type=hp["covariance_type"],
+            n_init=hp["n_init"],
+            random_state=SEED,
+        ),
+        "p3-gaussian-mixture-perfiles-uso",
+        "P3 candidato: mezcla de gaussianas sobre perfiles de uso (grupos elípticos y "
+        "asignación probabilística).",
+        hp,
+    )
+
+
 P3_MODELS: dict[str, ModelSpec] = {
     "baseline": ModelSpec(p3_geographic_kmeans, "kmeans", "baseline", P3_MODEL_PARAMS["baseline"]),
     "regla": ModelSpec(p3_morning_evening_rule, "rule", "baseline"),
     "kmeans": ModelSpec(p3_profile_kmeans, "kmeans", "candidate", P3_MODEL_PARAMS["kmeans"]),
+    "minibatch": ModelSpec(
+        p3_minibatch_kmeans, "kmeans", "candidate", P3_MODEL_PARAMS["minibatch"]
+    ),
+    "birch": ModelSpec(p3_birch, "hierarchical", "candidate", P3_MODEL_PARAMS["birch"]),
+    "gmm": ModelSpec(p3_gaussian_mixture, "mixture", "candidate", P3_MODEL_PARAMS["gmm"]),
 }
 
 

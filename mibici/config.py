@@ -119,6 +119,8 @@ P1_MODEL_PARAMS = {
         "validation_fraction": 0.1,
         "n_iter_no_change": 30,
     },
+    "ridge": {"alpha": 1.0},
+    "rf": {"n_estimators": 100, "max_depth": 15, "min_samples_leaf": 10},
 }
 P2_MODEL_PARAMS = {
     "logistica": {"C": 1.0, "class_weight": "balanced", "max_iter": 1000},
@@ -133,11 +135,20 @@ P2_MODEL_PARAMS = {
         "validation_fraction": 0.1,
         "n_iter_no_change": 30,
     },
+    "rf": {
+        "n_estimators": 150,
+        "max_depth": 12,
+        "min_samples_leaf": 50,
+        "class_weight": "balanced",
+    },
 }
 P3_MODEL_PARAMS = {
     "baseline": {"n_clusters": P3_BASELINE_K, "n_init": 20},
     # n_clusters = 0: se elige k en P3_K_RANGE por silueta.
     "kmeans": {"n_clusters": 0, "n_init": 20},
+    "minibatch": {"n_clusters": 3, "n_init": 10, "batch_size": 1024},
+    "birch": {"n_clusters": 3, "threshold": 0.5},
+    "gmm": {"n_clusters": 3, "covariance_type": "full", "n_init": 5},
 }
 
 # Métrica con la que la búsqueda elige la mejor combinación y el registro elige al champion:
@@ -169,7 +180,7 @@ MLFLOW_EXPERIMENT_NAME = f"mibici-{TEAM}"
 # Servidor local: mlflow server --backend-store-uri sqlite:///mlflow.db --port 5001
 # (el puerto 5000 lo ocupa AirPlay en macOS). mlflow run exporta esta variable al proceso.
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
-MLFLOW_ARTIFACTS_DIR = PROJ_ROOT / "mlartifacts"
+
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135
 try:

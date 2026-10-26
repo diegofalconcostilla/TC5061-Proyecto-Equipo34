@@ -27,6 +27,14 @@ def _convert(key: str, text: str, default):
     return text
 
 
+def cli_text(text: str) -> str:
+    """Quita las comillas con que ``mlflow run`` pasa un valor vacío en Windows (``""``)."""
+    text = text.strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
+        text = text[1:-1].strip()
+    return text
+
+
 def parse_overrides(text: str) -> dict[str, str]:
     """``"a=1,b=x"`` -> ``{"a": "1", "b": "x"}``; texto vacío -> ``{}``."""
     overrides = {}

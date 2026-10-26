@@ -18,7 +18,7 @@ import typer
 from mibici.config import SELECTION_METRIC
 from mibici.modeling.artifacts import log_table
 from mibici.modeling.common import get_spec
-from mibici.modeling.params import expand_grid, resolve_params
+from mibici.modeling.params import cli_text, expand_grid, resolve_params
 from mibici.modeling.tracking import setup_mlflow, start_run
 from mibici.modeling.train import MODELS, RUNNERS
 
@@ -75,7 +75,7 @@ def main(
     params: str = typer.Option("", help='Cambios fijos para todas las combinaciones: "k=v".'),
 ):
     """Entrena cada combinación de la malla como run hijo y resume en el run padre."""
-    question = question.lower()
+    question, grid, params = question.lower(), cli_text(grid), cli_text(params)
     if question not in RUNNERS:
         raise typer.BadParameter(f"question debe ser p1, p2 o p3, no {question!r}")
     setup_mlflow()

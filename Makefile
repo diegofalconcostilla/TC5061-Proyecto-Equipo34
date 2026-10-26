@@ -10,7 +10,7 @@ PYTHON_INTERPRETER = python
 MLFLOW_PORT ?= 5001
 export MLFLOW_TRACKING_URI ?= http://127.0.0.1:$(MLFLOW_PORT)
 # Entorno de mlflow run: uv (aislado, desde python_env.yaml) o local (el entorno activo).
-ENV_MANAGER ?= uv
+export ENV_MANAGER ?= uv
 ALIAS ?= champion
 MLFLOW_RUN = mlflow run . --env-manager $(ENV_MANAGER) --experiment-name mibici-equipo34
 
