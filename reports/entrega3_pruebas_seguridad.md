@@ -18,7 +18,7 @@ make validate                      # DeepChecks sobre P1, P2 y P3 (necesita make
 | Prueba de reproducibilidad | **Falta** |
 | Seguridad: `.gitignore`, variables de entorno, bandit o pip-audit con evidencia | **Parcial**: `.gitignore` y `.env` ya estaban; corrí pip-audit (resultado abajo); falta bandit, `.env.example` y la evidencia en el README |
 | Pruebas con un solo comando | Listo (`make test`) |
-| CI con GitHub Actions | **Falta** |
+| CI con GitHub Actions | **Parcial**: ya corren lint y pruebas en cada PR; faltan bandit y pip-audit |
 | Commits de todos | **Falta**: cada quien con su parte |
 
 ## Qué hice y por qué
@@ -34,7 +34,8 @@ Un commit por tema:
    - Si falla la integridad, el comando termina con error. El drift solo avisa: la partición es temporal y un cambio entre 2024-2025 y 2026 es esperado. Lo documentamos en vez de bloquear.
    - Guarda un HTML por suite en `reports/deepchecks/`, que agregué al `.gitignore` porque son archivos generados de hasta 34 MB.
 4. **`test(validation)`: 6 pruebas con tablas sintéticas.** Comprueban que una tabla limpia pasa y que las suites detectan nulos, duplicados, una columna constante y una feature desplazada. No usan los datos de MiBici, así que corren en CI.
-5. **`docs`**: sección [Validación de datos](../README.md#validación-de-datos) en el README con capturas, [`validacion_datos.md`](validacion_datos.md) con los hallazgos y este documento.
+5. **`ci`: workflow de GitHub Actions** (`.github/workflows/ci.yml`). En cada PR y en cada push a `main` instala `requirements.txt` y corre `make lint` y `make test`. DeepChecks entra con las pruebas sintéticas; `make validate` no, porque necesita los datos de MiBici y no se versionan.
+6. **`docs`**: sección [Validación de datos](../README.md#validación-de-datos) en el README con capturas, [`validacion_datos.md`](validacion_datos.md) con los hallazgos y este documento.
 
 ### Lo que encontró DeepChecks
 
@@ -110,29 +111,21 @@ Lo ideal es llamar a las funciones de verdad (`p1_hgb(parts, hp)`) con un `parts
 
 ### 3. CI con GitHub Actions
 
-Un workflow en `.github/workflows/ci.yml` que corra en cada PR. DeepChecks entra a CI con las pruebas sintéticas de `make test`; `make validate` no, porque necesita los datos de MiBici y no se versionan.
+El workflow ya existe (`.github/workflows/ci.yml`) y corre `make lint` y `make test`. Falta que quien haga seguridad le agregue bandit y pip-audit, **después** de resolver las vulnerabilidades de la sección anterior; si se agregan antes, todos los PR quedan en rojo.
+
+1. Agregar `bandit` y `pip-audit` con versión fija en `requirements.txt`, debajo de `# Calidad`.
+2. Subir mlflow a 3.17.2 y comprobar con `make all` que todo sigue funcionando.
+3. Agregar al final de `ci.yml`:
 
 ```yaml
-name: CI
-on: [pull_request]
-jobs:
-  checks:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -r requirements.txt bandit pip-audit
-      - run: make lint
-      - run: make test
       - run: bandit -r mibici
-      - run: pip-audit
+      # setuptools no se puede subir mientras DeepChecks necesite pkg_resources (ver README).
+      - run: pip-audit --ignore-vuln PYSEC-2026-3447 --ignore-vuln GHSA-xmj3-9gf7-h52w
 ```
 
-Si `pip-audit` falla por las vulnerabilidades de arriba, se pueden ignorar una por una con `--ignore-vuln <ID>`, citando en el README por qué no nos afectan.
+Cada vulnerabilidad que se ignore debe quedar explicada en el README.
 
 ### 4. README y commits
 
-- Cada quien agrega su sección (pruebas, seguridad, CI) con el comando para correrla y una captura.
+- Cada quien agrega su sección (pruebas, seguridad) con el comando para correrla y una captura. Para el CI sirve una captura de la pestaña *Checks* de un PR en verde.
 - La entrega pide commits de todos: cada quien hace su parte en su propia rama y abre su PR.

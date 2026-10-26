@@ -34,6 +34,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ## Estructura del repositorio
 
 ```
+├── .github/workflows/ci.yml  <- CI: lint y pruebas en cada Pull Request
 ├── MLproject              <- MLflow Project: ingest, train, search y register
 ├── python_env.yaml        <- entorno del MLflow Project (Python 3.12 + requirements.txt)
 ├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate
@@ -258,6 +259,7 @@ Para leer un reporte, empieza por la tabla *Conditions Summary*: ✓ pasó, ✖ 
 | Dependencias fijas | `requirements.txt` con `==` en todas las dependencias. |
 | Nada de datos, modelos ni MLflow en Git | `.gitignore` excluye `data/*` (salvo el manifiesto), `*.csv`, `*.parquet`, `mlruns/`, `mlartifacts/`, `mlflow.db`, `models/*`, modelos serializados y `.env`. |
 | Cambios por Pull Request revisado | `main` protegida: no admite push directo, ni siquiera de administradores. |
+| Integración continua | GitHub Actions corre `make lint` y `make test` en cada Pull Request (`.github/workflows/ci.yml`). |
 | Sin fuga de información del futuro | Lags con `shift` >= horizonte (validado en `add_lag_features` y en `tests/`), partición temporal y perfiles de P3 calculados solo con train. |
 
 ## Flujo de trabajo con Git
