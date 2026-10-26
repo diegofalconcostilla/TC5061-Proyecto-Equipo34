@@ -45,5 +45,7 @@ No es un error de datos, así que estas columnas están declaradas como excepci�
 | Integridad de P1 | Train contra test de P1 |
 |---|---|
 | ![Integridad de P1](figures/deepchecks/p1_integridad.png) | ![Drift de P1](figures/deepchecks/p1_train_contra_test.png) |
+| **Integridad de P2** | **Train contra test de P2** |
+| ![Integridad de P2](figures/deepchecks/p2_integridad.png) | ![Drift de P2](figures/deepchecks/p2_train_contra_test.png) |
 | **Integridad de P3** | **Train contra test de P3** |
 | ![Integridad de P3](figures/deepchecks/p3_integridad.png) | ![Drift de P3](figures/deepchecks/p3_train_contra_test.png) |

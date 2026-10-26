@@ -236,6 +236,8 @@ Para leer un reporte, empieza por la tabla *Conditions Summary*: ✓ pasó, ✖ 
 | Integridad de P1 | Train contra test de P1 |
 |---|---|
 | ![Integridad de P1](reports/figures/deepchecks/p1_integridad.png) | ![Drift de P1](reports/figures/deepchecks/p1_train_contra_test.png) |
+| **Integridad de P2** | **Train contra test de P2** |
+| ![Integridad de P2](reports/figures/deepchecks/p2_integridad.png) | ![Drift de P2](reports/figures/deepchecks/p2_train_contra_test.png) |
 | **Integridad de P3** | **Train contra test de P3** |
 | ![Integridad de P3](reports/figures/deepchecks/p3_integridad.png) | ![Drift de P3](reports/figures/deepchecks/p3_train_contra_test.png) |
 
