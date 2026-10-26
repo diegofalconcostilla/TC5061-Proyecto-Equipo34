@@ -54,6 +54,11 @@ format:
 test:
 	python -m pytest tests
 
+## Validar los datasets de P1, P2 y P3 con DeepChecks (reportes en reports/deepchecks/)
+.PHONY: validate
+validate:
+	$(PYTHON_INTERPRETER) -m mibici.validation
+
 
 ## Set up Python interpreter environment
 .PHONY: create_environment

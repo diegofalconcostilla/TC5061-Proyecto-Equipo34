@@ -9,6 +9,9 @@ mlruns/
 mlartifacts/
 mlflow.db
 
+# Reportes HTML de DeepChecks (se regeneran con make validate)
+/reports/deepchecks/
+
 # Modelos serializados
 /models/*
 !/models/.gitkeep
