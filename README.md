@@ -54,8 +54,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   ├── ml_canvas.md / .png               <- ML Canvas
 │   └── arquitectura.md / .png            <- diagrama de arquitectura
 ├── reports
-│   ├── entrega2_infraestructura_mlflow.md  <- qué se hizo en la infraestructura y qué falta
-│   ├── entrega3_pruebas_seguridad.md       <- entrega 3: qué se hizo y qué falta
+│   ├── entrega3-propuestas-oscar.md        <- entrega 3: qué se hizo y qué falta
 │   ├── validacion_datos.md                 <- hallazgos de DeepChecks por pregunta
 │   ├── deepchecks/        <- reportes HTML de make validate (no versionado)
 │   └── figures/           <- capturas de MLflow (mlflow/) y de DeepChecks (deepchecks/)
@@ -242,7 +241,7 @@ Para leer un reporte, empieza por la tabla *Conditions Summary*: ✓ pasó, ✖ 
 
 `tests/test_validation.py` comprueba con tablas sintéticas que las suites detectan nulos, duplicados, columnas constantes y drift, así que corre con `make test` sin los datos de MiBici.
 
-**Versiones.** DeepChecks 0.19.1 (la última) usa `np.Inf` y el scorer `max_error`, que ya no existen en numpy 2 ni en scikit-learn 1.6 o posterior. Para tener un solo entorno, `requirements.txt` fija numpy 1.26.4, pandas 2.2.3, scikit-learn 1.5.2 y scipy 1.14.1. Con estas versiones 14 de los 18 modelos dan exactamente las mismas métricas; los otros 4 cambian en la tercera o cuarta cifra decimal y ningún champion cambia (detalle en [`reports/entrega3_pruebas_seguridad.md`](reports/entrega3_pruebas_seguridad.md)).
+**Versiones.** DeepChecks 0.19.1 (la última) usa `np.Inf` y el scorer `max_error`, que ya no existen en numpy 2 ni en scikit-learn 1.6 o posterior. Para tener un solo entorno, `requirements.txt` fija numpy 1.26.4, pandas 2.2.3, scikit-learn 1.5.2 y scipy 1.14.1. Con estas versiones 14 de los 18 modelos dan exactamente las mismas métricas; los otros 4 cambian en la tercera o cuarta cifra decimal y ningún champion cambia (detalle en [`reports/entrega3-propuestas-oscar.md`](reports/entrega3-propuestas-oscar.md)).
 
 ## Buenas prácticas aplicadas
 
