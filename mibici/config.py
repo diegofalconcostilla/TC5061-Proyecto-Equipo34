@@ -181,6 +181,12 @@ MLFLOW_EXPERIMENT_NAME = f"mibici-{TEAM}"
 # (el puerto 5000 lo ocupa AirPlay en macOS). mlflow run exporta esta variable al proceso.
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
 
+# ---------------------------------------------------------------------------
+# Validación de datos (DeepChecks)
+# ---------------------------------------------------------------------------
+# Filas por conjunto que revisa DeepChecks (muestra con SEED); P2 tiene ~2 millones.
+VALIDATION_SAMPLE_SIZE = 50_000
+
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135
 try:

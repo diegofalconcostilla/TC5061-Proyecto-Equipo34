@@ -34,9 +34,10 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ## Estructura del repositorio
 
 ```
+├── .github/workflows/ci.yml  <- CI: lint y pruebas en cada Pull Request
 ├── MLproject              <- MLflow Project: ingest, train, search y register
 ├── python_env.yaml        <- entorno del MLflow Project (Python 3.12 + requirements.txt)
-├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test
+├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate
 ├── README.md
 ├── requirements.txt       <- dependencias con versión fija
 ├── pyproject.toml         <- metadatos del paquete mibici y configuración de ruff
@@ -53,15 +54,18 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   ├── ml_canvas.md / .png               <- ML Canvas
 │   └── arquitectura.md / .png            <- diagrama de arquitectura
 ├── reports
-│   ├── entrega2_infraestructura_mlflow.md  <- qué se hizo en la infraestructura y qué falta
-│   └── figures/mlflow/    <- capturas de la interfaz de MLflow
+│   ├── entrega3-propuestas-oscar.md        <- entrega 3: qué se hizo y qué falta
+│   ├── validacion_datos.md                 <- hallazgos de DeepChecks por pregunta
+│   ├── deepchecks/        <- reportes HTML de make validate (no versionado)
+│   └── figures/           <- capturas de MLflow (mlflow/) y de DeepChecks (deepchecks/)
 ├── scripts
 │   └── run_experiments.sh <- todos los runs de la entrega y el registro de champions
-├── tests/                 <- pruebas de ingesta y de ausencia de fuga temporal
+├── tests/                 <- pruebas de ingesta, features, modelado y validación de datos
 └── mibici                 <- módulo del proyecto
     ├── config.py          <- rutas, fechas, cortes, semilla y parámetros en un solo lugar
     ├── dataset.py         <- ingesta reproducible y verificación (CLI)
     ├── features.py        <- feature engineering de P1, P2 y P3 (CLI)
+    ├── validation.py      <- validación de datos con DeepChecks (CLI)
     ├── plots.py           <- gráficas que se registran como artefactos
     └── modeling
         ├── train.py       <- entrena un modelo (punto de entrada train)
@@ -89,6 +93,8 @@ pip install -r requirements.txt         # instala también el paquete mibici en 
 ```
 
 Si `pip install` termina con `ERROR: Package 'mibici' requires a different Python: X.Y.Z not in '~=3.12.0'`, el entorno se creó con otra versión de Python: borra `.venv` y vuelve a crearlo con Python 3.12.
+
+Si ya tenías el entorno de la entrega 2, vuelve a correr `pip install -r requirements.txt`: numpy, pandas y scikit-learn bajaron de versión para que funcione DeepChecks (detalle en [Validación de datos](#validación-de-datos)).
 
 ## Reproducir el experimento
 
@@ -199,6 +205,46 @@ Las cifras de P2 cambiaron ligeramente respecto a la primera entrega: el [PR #12
 
 **Nota sobre P2:** los clasificadores se entrenan con `class_weight="balanced"`, así que su `predict_proba` no es una probabilidad calibrada: en prueba, la probabilidad media predicha por el candidato es 0.17, frente a una prevalencia real de riesgo de 0.025. El score sirve para ordenar estaciones por riesgo (PR-AUC, y F1 con el umbral elegido en validación), no para comunicar "X % de riesgo" (van den Goorbergh et al., 2022). Si se necesitan probabilidades, por ejemplo para decidir con costos, hay que calibrar con el periodo de validación o entrenar sin pesos.
 
+## Validación de datos
+
+Antes de entrenar se puede revisar la calidad de los datasets de P1, P2 y P3 con [DeepChecks](https://docs.deepchecks.com/stable/tabular/index.html). Requiere haber corrido la ingesta (`make ingest`) y no necesita el servidor de MLflow:
+
+```bash
+make validate                                # P1, P2 y P3 (unos 15 segundos)
+python -m mibici.validation --question p2    # solo una pregunta
+```
+
+Se validan las mismas columnas que usa cada modelo, con una muestra fija de 50,000 filas por conjunto (`VALIDATION_SAMPLE_SIZE` y `SEED` en `config.py`). Por pregunta corren dos suites y cada una guarda un reporte HTML en `reports/deepchecks/` (no se versiona; ábrelo con el navegador):
+
+| Suite | Chequeo | Condición para pasar |
+|---|---|---|
+| Integridad (train y test por separado) | `PercentOfNulls` | hasta 5 % de nulos por columna |
+| | `MixedNulls` | una sola forma de faltante por columna |
+| | `MixedDataTypes` | un solo tipo de dato por columna |
+| | `DataDuplicates` | hasta 5 % de filas repetidas |
+| | `IsSingleValue` | ninguna columna constante |
+| | `ConflictingLabels` | hasta 5 % de filas iguales con etiqueta distinta (solo P2) |
+| Train contra test | `FeatureDrift` | drift de cada feature menor a 0.2 (KS o V de Cramer) |
+| | `LabelDrift` | drift de la etiqueta menor a 0.15 (P1 y P2) |
+| | `NewCategoryTrainTest` | ninguna categoría nueva en test |
+| | `DatasetsSizeComparison` | test con al menos 100 filas |
+
+Si falla un chequeo de integridad, el comando termina con error. El drift solo se reporta como aviso: la partición es temporal (2024-2025 contra 2026) y un cambio de distribución es esperado; se documenta en vez de bloquear. Hallazgos por pregunta en [`reports/validacion_datos.md`](reports/validacion_datos.md).
+
+Para leer un reporte, empieza por la tabla *Conditions Summary*: ✓ pasó, ✖ no pasó, y la columna *More Info* dice qué columna y con qué valor. Más abajo vienen las gráficas de cada chequeo.
+
+| Integridad de P1 | Train contra test de P1 |
+|---|---|
+| ![Integridad de P1](reports/figures/deepchecks/p1_integridad.png) | ![Drift de P1](reports/figures/deepchecks/p1_train_contra_test.png) |
+| **Integridad de P2** | **Train contra test de P2** |
+| ![Integridad de P2](reports/figures/deepchecks/p2_integridad.png) | ![Drift de P2](reports/figures/deepchecks/p2_train_contra_test.png) |
+| **Integridad de P3** | **Train contra test de P3** |
+| ![Integridad de P3](reports/figures/deepchecks/p3_integridad.png) | ![Drift de P3](reports/figures/deepchecks/p3_train_contra_test.png) |
+
+`tests/test_validation.py` comprueba con tablas sintéticas que las suites detectan nulos, duplicados, columnas constantes y drift, así que corre con `make test` sin los datos de MiBici.
+
+**Versiones.** DeepChecks 0.19.1 (la última) usa `np.Inf` y el scorer `max_error`, que ya no existen en numpy 2 ni en scikit-learn 1.6 o posterior. Para tener un solo entorno, `requirements.txt` fija numpy 1.26.4, pandas 2.2.3, scikit-learn 1.5.2 y scipy 1.14.1. Con estas versiones 14 de los 18 modelos dan exactamente las mismas métricas; los otros 4 cambian en la tercera o cuarta cifra decimal y ningún champion cambia (detalle en [`reports/entrega3-propuestas-oscar.md`](reports/entrega3-propuestas-oscar.md)).
+
 ## Buenas prácticas aplicadas
 
 | Práctica | Cómo se aplica |
@@ -214,6 +260,7 @@ Las cifras de P2 cambiaron ligeramente respecto a la primera entrega: el [PR #12
 | Dependencias fijas | `requirements.txt` con `==` en todas las dependencias. |
 | Nada de datos, modelos ni MLflow en Git | `.gitignore` excluye `data/*` (salvo el manifiesto), `*.csv`, `*.parquet`, `mlruns/`, `mlartifacts/`, `mlflow.db`, `models/*`, modelos serializados y `.env`. |
 | Cambios por Pull Request revisado | `main` protegida: no admite push directo, ni siquiera de administradores. |
+| Integración continua | GitHub Actions corre `make lint` y `make test` en cada Pull Request (`.github/workflows/ci.yml`). |
 | Sin fuga de información del futuro | Lags con `shift` >= horizonte (validado en `add_lag_features` y en `tests/`), partición temporal y perfiles de P3 calculados solo con train. |
 
 ## Flujo de trabajo con Git

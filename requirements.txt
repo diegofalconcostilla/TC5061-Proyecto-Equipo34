@@ -1,9 +1,13 @@
 # Python 3.12 - dependencias con versión fija
+# numpy y scikit-learn están en la última versión que soporta DeepChecks 0.19.1 (usa np.Inf
+# y el scorer 'max_error', que ya no existen en numpy 2 ni en scikit-learn >= 1.6).
+# pandas 2.2.3 es la última anterior a pandas 3, que salió después de scikit-learn 1.5.
 # Datos y modelado
-numpy==2.5.3
-pandas==3.0.5
+numpy==1.26.4
+pandas==2.2.3
 pyarrow==25.0.1
-scikit-learn==1.9.1
+scikit-learn==1.5.2
+scipy==1.14.1
 matplotlib==3.11.2
 requests==2.34.2
 
@@ -24,6 +28,12 @@ ipykernel==7.4.0
 nbconvert==7.17.2
 
 # Calidad
+deepchecks==0.19.1
+# Dependencias de DeepChecks fijadas: sus versiones nuevas exigen numpy 2 o scikit-learn >= 1.6,
+# y setuptools >= 81 ya no incluye pkg_resources, que DeepChecks importa.
+category_encoders==2.6.4
+statsmodels==0.14.4
+setuptools==80.9.0
 pytest==9.1.1
 ruff==0.17.0
 pip==26.2.1

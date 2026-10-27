@@ -63,9 +63,7 @@ def plot_regression_diagnostics(y_true, y_pred, title: str, path: Path) -> Path:
 def plot_classification(y_true, y_score, y_pred, title: str, path: Path) -> Path:
     """P2: curva precisión-exhaustividad y matriz de confusión."""
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))
-    PrecisionRecallDisplay.from_predictions(
-        y_true, y_score, ax=axes[0], curve_kwargs={"color": PALETTE[0]}
-    )
+    PrecisionRecallDisplay.from_predictions(y_true, y_score, ax=axes[0], color=PALETTE[0])
     axes[0].set_title("Curva precisión-exhaustividad")
     axes[0].grid(alpha=0.3)
     ConfusionMatrixDisplay.from_predictions(
