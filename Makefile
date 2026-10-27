@@ -59,6 +59,14 @@ test:
 validate:
 	$(PYTHON_INTERPRETER) -m mibici.validation
 
+## Chequeos de seguridad: código (bandit) y dependencias instaladas (pip-audit)
+# setuptools 80.9.0 no se puede subir mientras DeepChecks necesite pkg_resources (ver README).
+PIP_AUDIT_IGNORE = --ignore-vuln PYSEC-2026-3447 --ignore-vuln GHSA-xmj3-9gf7-h52w
+.PHONY: security
+security:
+	bandit -r mibici
+	pip-audit --skip-editable $(PIP_AUDIT_IGNORE)
+
 
 ## Set up Python interpreter environment
 .PHONY: create_environment
