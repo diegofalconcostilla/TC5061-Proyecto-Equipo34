@@ -23,6 +23,7 @@ mlflow.db
 # Credenciales
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 credentials*.json

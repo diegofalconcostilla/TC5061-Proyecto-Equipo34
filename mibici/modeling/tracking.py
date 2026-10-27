@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import subprocess
+# bandit: solo se usa para leer el commit con git (argumentos fijos, sin shell).
+import subprocess  # nosec B404
 
 import mlflow
 
@@ -24,8 +25,11 @@ def git_info() -> dict[str, str]:
     """Commit, rama y estado del árbol de trabajo de Git para ligar el run al código."""
 
     def run(*args: str) -> str:
+        # Los argumentos están escritos en este archivo y no vienen del usuario; git se busca en
+        # el PATH a propósito porque su ruta cambia entre Windows, macOS y Linux.
         try:
-            return subprocess.check_output(["git", *args], cwd=PROJ_ROOT, text=True).strip()
+            out = subprocess.check_output(["git", *args], cwd=PROJ_ROOT, text=True)  # nosec B603 B607
+            return out.strip()
         except (subprocess.CalledProcessError, FileNotFoundError):
             return "unknown"
 
