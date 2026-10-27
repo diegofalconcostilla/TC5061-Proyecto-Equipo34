@@ -6,7 +6,8 @@ Aquí les cuento qué hice en mi parte de la entrega 3 (validación de datos con
 
 ```bash
 pip install -r requirements.txt   # obligatorio: cambiaron versiones (abajo explico)
-make test                          # 31 pruebas, no necesita datos
+make test                          # 51 pruebas, no necesita datos
+make security                      # bandit y pip-audit
 make validate                      # DeepChecks sobre P1, P2 y P3 (necesita make ingest)
 ```
 
@@ -14,11 +15,11 @@ make validate                      # DeepChecks sobre P1, P2 y P3 (necesita make
 |---|---|
 | Validación de datos con DeepChecks (integridad, nulos, duplicados, drift) | Listo |
 | Evidencia de DeepChecks en el README con capturas | Listo |
-| Pruebas unitarias de casos normales y de borde | **Parcial**: hay pruebas de ingesta, features, parámetros y validación; faltan las de métricas y modelos |
-| Prueba de reproducibilidad | **Falta** |
-| Seguridad: `.gitignore`, variables de entorno, bandit o pip-audit con evidencia | **Parcial**: `.gitignore` y `.env` ya estaban; corrí pip-audit (resultado abajo); falta bandit, `.env.example` y la evidencia en el README |
+| Pruebas unitarias de casos normales y de borde | Listo (`tests/test_metrics.py`) |
+| Prueba de reproducibilidad | Listo (`tests/test_reproducibility.py`) |
+| Seguridad: `.gitignore`, variables de entorno, bandit o pip-audit con evidencia | Listo (sección [Seguridad](../README.md#seguridad) del README) |
 | Pruebas con un solo comando | Listo (`make test`) |
-| CI con GitHub Actions | **Parcial**: ya corren lint y pruebas en cada PR; faltan bandit y pip-audit |
+| CI con GitHub Actions | Listo: lint, pruebas y `make security` en cada PR |
 | Commits de todos | **Falta**: cada quien con su parte |
 
 ## Qué hice y por qué
