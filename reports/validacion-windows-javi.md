@@ -8,3 +8,11 @@
 - **Verificación del Entorno:**
   - Se validó la correcta integración del entorno virtual de MLOps y la compatibilidad del servidor local de MLflow.
 - **Conclusión:** El proyecto, la integridad de las pruebas unitarias, contratos de datos, Deepchecks y reproducibilidad funcionan de manera impecable en arquitectura Windows.
+
+## Evidencias de Ejecución
+
+![Captura 1](./1.png)
+
+![Captura 2](./2.png)
+
+![Captura 3](./3.png)
