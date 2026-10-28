@@ -12,7 +12,8 @@ matplotlib==3.11.2
 requests==2.34.2
 
 # Seguimiento de experimentos
-mlflow==3.16.0
+# 3.17.2 corrige CVE-2026-53995 y CVE-2026-115886 (pip-audit)
+mlflow==3.17.2
 
 # CLI y utilidades
 typer==0.27.3
@@ -37,5 +38,14 @@ setuptools==80.9.0
 pytest==9.1.1
 ruff==0.17.0
 pip==26.2.1
+
+# Seguridad: análisis de código (bandit) y de dependencias (pip-audit)
+bandit==1.9.4
+pip-audit==2.10.1
+# Dependencias indirectas fijadas en la versión que corrige vulnerabilidades reportadas por
+# pip-audit: pillow (de matplotlib), certifi (de requests) y gitpython (de mlflow).
+pillow==13.0.0
+certifi==2026.10.23
+gitpython==3.2.1
 
 -e .

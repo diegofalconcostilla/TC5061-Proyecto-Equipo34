@@ -18,3 +18,5 @@ jobs:
       - run: make lint
       # Las pruebas usan datos sintéticos: los datos de MiBici no están en el repositorio.
       - run: make test
+      # bandit sobre el código y pip-audit sobre las dependencias instaladas.
+      - run: make security

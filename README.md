@@ -34,10 +34,11 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ## Estructura del repositorio
 
 ```
-├── .github/workflows/ci.yml  <- CI: lint y pruebas en cada Pull Request
+├── .github/workflows/ci.yml  <- CI: lint, pruebas y chequeos de seguridad en cada Pull Request
+├── .env.example           <- variables de entorno configurables (copiar a .env, que no se versiona)
 ├── MLproject              <- MLflow Project: ingest, train, search y register
 ├── python_env.yaml        <- entorno del MLflow Project (Python 3.12 + requirements.txt)
-├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate
+├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate | security
 ├── README.md
 ├── requirements.txt       <- dependencias con versión fija
 ├── pyproject.toml         <- metadatos del paquete mibici y configuración de ruff
@@ -56,11 +57,12 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ├── reports
 │   ├── entrega3-propuestas-oscar.md        <- entrega 3: qué se hizo y qué falta
 │   ├── validacion_datos.md                 <- hallazgos de DeepChecks por pregunta
+│   ├── seguridad/         <- salida de bandit, pip-audit y la revisión del historial
 │   ├── deepchecks/        <- reportes HTML de make validate (no versionado)
-│   └── figures/           <- capturas de MLflow (mlflow/) y de DeepChecks (deepchecks/)
+│   └── figures/           <- capturas de MLflow, DeepChecks, pruebas y seguridad
 ├── scripts
 │   └── run_experiments.sh <- todos los runs de la entrega y el registro de champions
-├── tests/                 <- pruebas de ingesta, features, modelado y validación de datos
+├── tests/                 <- pruebas de ingesta, features, modelado, métricas, reproducibilidad y validación
 └── mibici                 <- módulo del proyecto
     ├── config.py          <- rutas, fechas, cortes, semilla y parámetros en un solo lugar
     ├── dataset.py         <- ingesta reproducible y verificación (CLI)
@@ -94,7 +96,7 @@ pip install -r requirements.txt         # instala también el paquete mibici en 
 
 Si `pip install` termina con `ERROR: Package 'mibici' requires a different Python: X.Y.Z not in '~=3.12.0'`, el entorno se creó con otra versión de Python: borra `.venv` y vuelve a crearlo con Python 3.12.
 
-Si ya tenías el entorno de la entrega 2, vuelve a correr `pip install -r requirements.txt`: numpy, pandas y scikit-learn bajaron de versión para que funcione DeepChecks (detalle en [Validación de datos](#validación-de-datos)).
+Si ya tenías el entorno de la entrega 2, vuelve a correr `pip install -r requirements.txt`: numpy, pandas y scikit-learn bajaron de versión para que funcione DeepChecks (detalle en [Validación de datos](#validación-de-datos)), y mlflow, pillow, certifi y gitpython subieron para corregir vulnerabilidades (detalle en [Seguridad](#seguridad)).
 
 ## Reproducir el experimento
 
@@ -205,6 +207,30 @@ Las cifras de P2 cambiaron ligeramente respecto a la primera entrega: el [PR #12
 
 **Nota sobre P2:** los clasificadores se entrenan con `class_weight="balanced"`, así que su `predict_proba` no es una probabilidad calibrada: en prueba, la probabilidad media predicha por el candidato es 0.17, frente a una prevalencia real de riesgo de 0.025. El score sirve para ordenar estaciones por riesgo (PR-AUC, y F1 con el umbral elegido en validación), no para comunicar "X % de riesgo" (van den Goorbergh et al., 2022). Si se necesitan probabilidades, por ejemplo para decidir con costos, hay que calibrar con el periodo de validación o entrenar sin pesos.
 
+## Pruebas
+
+Todas las pruebas están en `tests/` y corren con un solo comando. Usan datos sintéticos, así que no necesitan la ingesta, el servidor de MLflow ni conexión a internet:
+
+```bash
+make test                    # equivale a: python -m pytest tests
+python -m pytest tests -v    # con el nombre de cada prueba
+```
+
+| Archivo | Qué prueba | Casos de borde |
+|---|---|---|
+| `test_dataset.py` | Rango de meses, corrección de acentos (mojibake), encabezados con distintas codificaciones y limpieza de viajes | Encabezado corrupto de 2024-02; viajes de 20 s y duplicados; se eliminan las columnas personales |
+| `test_features.py` | Pascua (días festivos), lags y medias móviles, partición temporal y etiqueta de riesgo de P2 | Un lag menor al horizonte se rechaza (evita fuga de información); los lags no mezclan estaciones; umbral exacto de media capacidad |
+| `test_metrics.py` | Métricas de P1, P2 y P3, umbral de F1, `ThresholdClassifier`, bloques de 3 h y versión de datos | Predicción perfecta; WAPE sin viajes (0/0); un modelo que nunca predice riesgo; validación con una sola clase; clustering de un solo grupo; viajes a las 5:59, 6:00 y 23:59; manifiesto en otro orden |
+| `test_modeling.py` | Hiperparámetros desde `-P params` y mallas de búsqueda | Parámetros vacíos, desconocidos o con número inválido; mallas mal escritas |
+| `test_reproducibility.py` | **Reproducibilidad:** entrenar dos veces con `SEED` da las mismas predicciones | HGB y random forest de P1 y P2, MiniBatchKMeans y mezcla de gaussianas de P3; control: con otros datos el modelo sí cambia |
+| `test_validation.py` | Las suites de DeepChecks detectan nulos, duplicados, columnas constantes y drift | Columna constante conocida (excepción declarada) contra una nueva |
+
+**Reproducibilidad.** Las pruebas llaman a las funciones de entrenamiento del proyecto (`p1_hgb`, `p2_random_forest`, `p3_minibatch_kmeans`, etc.), no solo a scikit-learn, con tablas sintéticas que tienen las mismas columnas que los datasets reales. Todos los modelos usan `random_state=SEED` (`SEED = 42` en `config.py`). Los random forest entrenan árboles idénticos, pero con `n_jobs=-1` suman las predicciones de los árboles en paralelo y el orden de la suma cambia los últimos bits (diferencias de 1e-15), así que las predicciones se comparan con una tolerancia de 1e-12 y no bit a bit.
+
+GitHub Actions corre `make lint`, `make test` y `make security` en cada Pull Request y en cada push a `main` (`.github/workflows/ci.yml`).
+
+![Ejecución de las pruebas](reports/figures/pruebas/pytest.png)
+
 ## Validación de datos
 
 Antes de entrenar se puede revisar la calidad de los datasets de P1, P2 y P3 con [DeepChecks](https://docs.deepchecks.com/stable/tabular/index.html). Requiere haber corrido la ingesta (`make ingest`) y no necesita el servidor de MLflow:
@@ -245,6 +271,42 @@ Para leer un reporte, empieza por la tabla *Conditions Summary*: ✓ pasó, ✖ 
 
 **Versiones.** DeepChecks 0.19.1 (la última) usa `np.Inf` y el scorer `max_error`, que ya no existen en numpy 2 ni en scikit-learn 1.6 o posterior. Para tener un solo entorno, `requirements.txt` fija numpy 1.26.4, pandas 2.2.3, scikit-learn 1.5.2 y scipy 1.14.1. Con estas versiones 14 de los 18 modelos dan exactamente las mismas métricas; los otros 4 cambian en la tercera o cuarta cifra decimal y ningún champion cambia (detalle en [`reports/entrega3-propuestas-oscar.md`](reports/entrega3-propuestas-oscar.md)).
 
+## Seguridad
+
+```bash
+make security    # bandit sobre mibici/ y pip-audit sobre las dependencias instaladas
+```
+
+La salida completa de cada chequeo está en [`reports/seguridad/`](reports/seguridad/).
+
+**Credenciales y datos sensibles.**
+
+- No hay credenciales en el código. La única configuración externa es `MLFLOW_TRACKING_URI`, que se lee de una variable de entorno (`config.py` carga `.env` con `python-dotenv`).
+- [`.env.example`](.env.example) documenta las variables sin valores secretos. Para usarlo: `cp .env.example .env`.
+- `.gitignore` excluye `.env`, `.env.*` (salvo `.env.example`), `*.pem`, `*.key`, `credentials*.json`, los datos, los modelos y la base de MLflow.
+- La ingesta elimina las columnas personales de los viajes (usuario, género y año de nacimiento) antes de guardar nada. `test_clean_trips_drops_personal_data_and_invalid_rows` lo comprueba.
+- Revisamos todo el historial de Git: ninguna línea agregada contiene `password`, `secret`, `token` o `api_key` con un valor asignado, y no hay archivos `.env`, `.pem`, `.key` ni de credenciales versionados.
+
+**bandit (análisis del código).** Reportó 3 avisos de severidad baja, todos en `git_info()` de `tracking.py`, que llama a `git` para registrar el commit en cada run: B404 (importar `subprocess`), B603 (llamar un proceso) y B607 (ruta parcial del ejecutable). Son falsos positivos: los argumentos están fijos en el código, no vienen del usuario y no se usa shell. `git` se busca en el `PATH` a propósito porque su ruta cambia entre sistemas operativos. Se marcaron con `# nosec` y la explicación en el código; ahora bandit no reporta ningún problema.
+
+**pip-audit (dependencias).** Se audita el entorno instalado y no solo `requirements.txt`, para incluir también las dependencias indirectas. La primera corrida reportó 45 avisos de vulnerabilidad en 5 paquetes:
+
+| Paquete | Versión | Vulnerabilidades | Acción |
+|---|---|---|---|
+| mlflow | 3.16.0 | CVE-2026-53995 (path traversal en el backend FileStore) y CVE-2026-115886 (endpoint de scorers sin autenticación) | Subió a **3.17.2**. Comprobado con un entrenamiento real de P1 que registra el modelo y sus artefactos. |
+| pillow (de matplotlib) | 12.3.0 | 37 avisos por lectura de imágenes manipuladas (TIFF, GIF, PDF, etc.) | Fijado en **13.0.0**. Solo guardamos PNG generados por nosotros, pero la corrección no rompe nada. |
+| certifi (de requests) | 2026.7.22 | PYSEC-2026-4320 (certificado raíz revocado) | Fijado en **2026.10.23**. Importa porque la ingesta descarga los datos por HTTPS. |
+| gitpython (de mlflow) | 3.2.0 | CVE-2026-114145 (submódulos) | Fijado en **3.2.1**. |
+| setuptools | 80.9.0 | PYSEC-2026-3447 (directivas de `MANIFEST.in` al construir sdists) y GHSA-xmj3-9gf7-h52w (instalar eggs heredados en Windows) | **Riesgo aceptado.** DeepChecks 0.19.1 importa `pkg_resources`, que se quitó en setuptools 81. No construimos sdists ni instalamos eggs. `make security` ignora solo estos dos identificadores. |
+
+`pip-audit` omite el paquete `mibici` porque está instalado en modo editable y no existe en PyPI.
+
+| bandit | pip-audit |
+|---|---|
+| ![bandit](reports/figures/seguridad/bandit.png) | ![pip-audit](reports/figures/seguridad/pip_audit.png) ![pip-audit sin ignorar](reports/figures/seguridad/pip_audit_sin_ignorar.png) |
+| **Historial de Git** | |
+| ![Revisión del historial](reports/figures/seguridad/secretos_historial.png) | |
+
 ## Buenas prácticas aplicadas
 
 | Práctica | Cómo se aplica |
@@ -253,14 +315,15 @@ Para leer un reporte, empieza por la tabla *Conditions Summary*: ✓ pasó, ✖ 
 | Registrar lo necesario para reproducir | Parámetros `date_start`, `date_end`, `data_version`, `train_data_hash`, `valid_start`, `test_start`, `seed`, granularidad, horizonte, modelo e hiperparámetros; modelo con firma, datos y configuración como artefactos. |
 | Ligar el run al código y a la pregunta | Etiquetas `team`, `question`, `model_role`, `model_family`, `stage_of_work`, `git_commit`, `git_branch` y `git_dirty`. |
 | Métricas con el conjunto en el nombre | `valid_mae`, `test_mae`, `test_pr_auc`, `train_profile_silhouette`, `test_stability_ari`, etc. |
-| Sin credenciales ni datos personales | No hay credenciales en el código; las columnas personales se eliminan en la ingesta; los artefactos solo contienen agregados e identificadores públicos de estaciones. |
+| Sin credenciales ni datos personales | No hay credenciales en el código ni en el historial; la configuración va en variables de entorno (`.env.example`); las columnas personales se eliminan en la ingesta; los artefactos solo contienen agregados e identificadores públicos de estaciones. |
 | Notebooks solo para exploración | `notebooks/1.0-dfc-exploracion-mibici.ipynb` sigue la convención de la plantilla; la lógica vive en `mibici/`. |
 | Configuración en un solo lugar | Rutas, fechas, cortes, semilla, umbrales, hiperparámetros por defecto, métricas de selección y nombres del Model Registry en `mibici/config.py`. |
 | Experimento reproducible de punta a punta | MLflow Project con entorno fijo (`python_env.yaml`) y `make all` desde un clon limpio. |
 | Dependencias fijas | `requirements.txt` con `==` en todas las dependencias. |
 | Nada de datos, modelos ni MLflow en Git | `.gitignore` excluye `data/*` (salvo el manifiesto), `*.csv`, `*.parquet`, `mlruns/`, `mlartifacts/`, `mlflow.db`, `models/*`, modelos serializados y `.env`. |
 | Cambios por Pull Request revisado | `main` protegida: no admite push directo, ni siquiera de administradores. |
-| Integración continua | GitHub Actions corre `make lint` y `make test` en cada Pull Request (`.github/workflows/ci.yml`). |
+| Integración continua | GitHub Actions corre `make lint`, `make test` y `make security` en cada Pull Request (`.github/workflows/ci.yml`). |
+| Entrenamiento reproducible | Todos los modelos usan `random_state=SEED`; `tests/test_reproducibility.py` entrena dos veces y compara las predicciones. |
 | Sin fuga de información del futuro | Lags con `shift` >= horizonte (validado en `add_lag_features` y en `tests/`), partición temporal y perfiles de P3 calculados solo con train. |
 
 ## Flujo de trabajo con Git
