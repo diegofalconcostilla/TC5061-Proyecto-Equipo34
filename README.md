@@ -207,6 +207,109 @@ Las cifras de P2 cambiaron ligeramente respecto a la primera entrega: el [PR #12
 
 **Nota sobre P2:** los clasificadores se entrenan con `class_weight="balanced"`, así que su `predict_proba` no es una probabilidad calibrada: en prueba, la probabilidad media predicha por el candidato es 0.17, frente a una prevalencia real de riesgo de 0.025. El score sirve para ordenar estaciones por riesgo (PR-AUC, y F1 con el umbral elegido en validación), no para comunicar "X % de riesgo" (van den Goorbergh et al., 2022). Si se necesitan probabilidades, por ejemplo para decidir con costos, hay que calibrar con el periodo de validación o entrenar sin pesos.
 
+## API REST con FastAPI y Podman
+
+El proyecto expone los modelos P1, P2 y P3 registrados en MLflow mediante una API REST desarrollada con FastAPI y desplegada en un contenedor Podman.
+
+### Requisitos
+
+- Podman instalado y con su máquina virtual en ejecución.
+- Modelos registrados en MLflow con el alias `champion`.
+- Servidor MLflow disponible en el puerto 5001.
+- Artefactos de los modelos disponibles en el directorio `mlartifacts/`.
+
+### Construir la imagen
+
+Desde la raíz del repositorio:
+
+```bash
+podman build -t mibici-api:1.0 .
+```
+
+### Iniciar el servidor MLflow
+
+En una primera terminal:
+
+```bash
+export MLFLOW_SERVER_ALLOWED_HOSTS="localhost,localhost:5001,127.0.0.1,127.0.0.1:5001,host.containers.internal,host.containers.internal:5001"
+
+.venv/bin/mlflow server \
+  --backend-store-uri sqlite:///mlflow.db \
+  --port 5001
+```
+
+El servidor utiliza SQLite para el tracking y permite consultar el Model Registry.
+
+### Ejecutar el contenedor
+
+En una segunda terminal:
+
+```bash
+podman run --rm \
+  --name mibici-api \
+  -p 8000:8000 \
+  -e MLFLOW_TRACKING_URI=http://host.containers.internal:5001 \
+  -v "$(pwd)/mlartifacts:/Users/mar/Documents/GitHub/TC5061-Proyecto-Equipo34/mlartifacts" \
+  mibici-api:1.0
+```
+
+**Nota:** la ruta de destino del volumen debe coincidir con la ruta absoluta de almacenamiento de artefactos registrada en MLflow. El ejemplo corresponde al entorno donde se desarrolló y probó la API. En otros equipos debe ajustarse a la ruta registrada localmente. El volumen se monta con permisos de escritura porque MLflow puede necesitar crear metadatos auxiliares.
+
+### Endpoints disponibles
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| GET | `/` | Información general de la API |
+| GET | `/health` | Estado del servicio |
+| GET | `/models` | Modelos registrados y alias disponibles |
+| POST | `/predict/p1` | Predicciones del modelo P1 |
+| POST | `/predict/p2` | Predicciones del modelo P2 |
+| POST | `/predict/p3` | Predicciones del modelo P3 |
+
+La documentación interactiva está disponible en:
+
+```text
+http://localhost:8000/docs
+```
+
+### Formato de solicitud
+
+Los endpoints de predicción reciben un objeto JSON con una lista de registros:
+
+```json
+{
+  "records": [
+    {
+      "feature_1": 10.0,
+      "feature_2": 20.0
+    }
+  ]
+}
+```
+
+Las variables deben corresponder al esquema de entrada del modelo solicitado. La API valida las columnas requeridas y convierte los tipos de datos según la firma registrada en MLflow.
+
+### Verificación
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/models
+```
+
+Para probar una predicción, se puede utilizar Swagger (`/docs`) o enviar una solicitud POST con las variables correspondientes al modelo.
+
+La API utiliza el alias `champion` por defecto y devuelve las predicciones junto con el modelo utilizado y el número de resultados generados.
+
+### Pruebas de la API
+
+Las pruebas automatizadas de la API se ejecutan sin necesidad de cargar modelos reales ni iniciar el servidor MLflow:
+
+```bash
+python -m pytest tests/test_api.py -v
+```
+
+Estas pruebas utilizan modelos simulados para verificar los endpoints, las validaciones de entrada y el manejo de errores.
+
 ## Pruebas
 
 Todas las pruebas están en `tests/` y corren con un solo comando. Usan datos sintéticos, así que no necesitan la ingesta, el servidor de MLflow ni conexión a internet:
@@ -222,6 +325,7 @@ python -m pytest tests -v    # con el nombre de cada prueba
 | `test_features.py` | Pascua (días festivos), lags y medias móviles, partición temporal y etiqueta de riesgo de P2 | Un lag menor al horizonte se rechaza (evita fuga de información); los lags no mezclan estaciones; umbral exacto de media capacidad |
 | `test_metrics.py` | Métricas de P1, P2 y P3, umbral de F1, `ThresholdClassifier`, bloques de 3 h y versión de datos | Predicción perfecta; WAPE sin viajes (0/0); un modelo que nunca predice riesgo; validación con una sola clase; clustering de un solo grupo; viajes a las 5:59, 6:00 y 23:59; manifiesto en otro orden |
 | `test_modeling.py` | Hiperparámetros desde `-P params` y mallas de búsqueda | Parámetros vacíos, desconocidos o con número inválido; mallas mal escritas |
+| `test_api.py` | Endpoints REST, predicciones simuladas para P1, P2 y P3, validación de entradas y manejo de errores | Modelo desconocido, variables faltantes, registros vacíos y errores de carga desde MLflow |
 | `test_reproducibility.py` | **Reproducibilidad:** entrenar dos veces con `SEED` da las mismas predicciones | HGB y random forest de P1 y P2, MiniBatchKMeans y mezcla de gaussianas de P3; control: con otros datos el modelo sí cambia |
 | `test_validation.py` | Las suites de DeepChecks detectan nulos, duplicados, columnas constantes y drift | Columna constante conocida (excepción declarada) contra una nueva |
 
