@@ -12,6 +12,9 @@ export MLFLOW_TRACKING_URI ?= http://127.0.0.1:$(MLFLOW_PORT)
 # Entorno de mlflow run: uv (aislado, desde python_env.yaml) o local (el entorno activo).
 export ENV_MANAGER ?= uv
 ALIAS ?= champion
+# Motor de contenedores de la API: podman o docker (mismo Containerfile, estándar OCI).
+CONTAINER ?= podman
+API_IMAGE ?= mibici-api:1.1
 MLFLOW_RUN = mlflow run . --env-manager $(ENV_MANAGER) --experiment-name mibici-equipo34
 
 #################################################################################
@@ -143,6 +146,21 @@ register:
 .PHONY: predict
 predict:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.predict --question $(Q) --alias $(ALIAS)
+
+## Copiar los modelos del Model Registry a models/api/ para la imagen: make api-models [ALIAS=champion]
+.PHONY: api-models
+api-models:
+	$(PYTHON_INTERPRETER) -m mibici.api.registry --alias $(ALIAS)
+
+## Construir la imagen de la API: make api-build [CONTAINER=docker]
+.PHONY: api-build
+api-build:
+	$(CONTAINER) build -f Containerfile -t $(API_IMAGE) .
+
+## Levantar la API en http://localhost:8000 (documentación en /docs)
+.PHONY: api-run
+api-run:
+	$(CONTAINER) run --rm --name mibici-api -p 8000:8000 $(API_IMAGE)
 
 ## Todos los experimentos y el registro de champions (scripts/run_experiments.sh)
 .PHONY: experiments

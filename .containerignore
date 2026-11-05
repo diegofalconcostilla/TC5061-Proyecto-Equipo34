@@ -17,3 +17,6 @@ references
 tests
 *.pyc
 *.bak
+models/*
+!models/.gitkeep
+!models/api
