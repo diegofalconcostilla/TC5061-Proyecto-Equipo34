@@ -1,0 +1,42 @@
+{
+  "records": [
+    {
+      "block": 3,
+      "dow": 0,
+      "month": 8,
+      "is_weekend": 0,
+      "is_holiday": 0,
+      "capacity": 19,
+      "latitude": 20.66769,
+      "longitude": -103.368252,
+      "net_flow_lag1": 5.0,
+      "net_flow_lag6": -1.0,
+      "net_flow_lag42": -15.0,
+      "departures_lag1": 6.0,
+      "departures_lag6": 7.0,
+      "departures_lag42": 23.0,
+      "risk_lag6": 0.0,
+      "risk_lag42": 1.0,
+      "abs_net_flow_same_block_4w_mean": 8.25
+    },
+    {
+      "block": 0,
+      "dow": 0,
+      "month": 8,
+      "is_weekend": 0,
+      "is_holiday": 0,
+      "capacity": 15,
+      "latitude": 20.666378,
+      "longitude": -103.34882,
+      "net_flow_lag1": -1.0,
+      "net_flow_lag6": -3.0,
+      "net_flow_lag42": 4.0,
+      "departures_lag1": 2.0,
+      "departures_lag6": 5.0,
+      "departures_lag42": 11.0,
+      "risk_lag6": 0.0,
+      "risk_lag42": 0.0,
+      "abs_net_flow_same_block_4w_mean": 3.25
+    }
+  ]
+}
