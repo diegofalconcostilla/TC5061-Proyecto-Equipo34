@@ -1,4 +1,3 @@
-
 from functools import lru_cache
 from typing import Any
 
@@ -106,9 +105,7 @@ def predict(question: str, request: PredictionRequest, alias: str = "champion"):
             dtype_name = getattr(column.type, "name", str(column.type)).lower()
 
             if dtype_name in dtype_map:
-                frame[column.name] = frame[column.name].astype(
-                    dtype_map[dtype_name]
-                )
+                frame[column.name] = frame[column.name].astype(dtype_map[dtype_name])
 
         # Generar predicciones utilizando las columnas en el orden esperado.
         predictions = model.predict(frame[features])
