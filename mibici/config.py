@@ -182,6 +182,13 @@ MLFLOW_EXPERIMENT_NAME = f"mibici-{TEAM}"
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
 
 # ---------------------------------------------------------------------------
+# API REST (mibici/api)
+# ---------------------------------------------------------------------------
+# Modelos descargados del Model Registry con `make api-models`; el Containerfile los copia a la
+# imagen. Si no hay copia local de un modelo, la API lo descarga de MLFLOW_TRACKING_URI.
+API_MODELS_DIR = Path(os.environ.get("MIBICI_MODELS_DIR", MODELS_DIR / "api"))
+
+# ---------------------------------------------------------------------------
 # Validación de datos (DeepChecks)
 # ---------------------------------------------------------------------------
 # Filas por conjunto que revisa DeepChecks (muestra con SEED); P2 tiene ~2 millones.

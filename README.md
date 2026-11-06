@@ -38,9 +38,11 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ├── .env.example           <- variables de entorno configurables (copiar a .env, que no se versiona)
 ├── MLproject              <- MLflow Project: ingest, train, search y register
 ├── python_env.yaml        <- entorno del MLflow Project (Python 3.12 + requirements.txt)
-├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate | security
+├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate | security | api-models | api-build | api-run
+├── Containerfile          <- imagen OCI de la API (podman build o docker build)
 ├── README.md
 ├── requirements.txt       <- dependencias con versión fija
+├── requirements-api.txt   <- dependencias de la imagen de la API (mismas versiones)
 ├── pyproject.toml         <- metadatos del paquete mibici y configuración de ruff
 ├── data
 │   ├── manifest.json      <- versionado de datos (único archivo de data/ en Git)
@@ -48,7 +50,8 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   ├── interim/           <- Parquet limpio por mes y estaciones (no versionado)
 │   └── processed/         <- datasets de P1, P2 y P3 (no versionado)
 ├── docs/                  <- propuesta (entrega 1) y reporte de MLflow (entrega 2) en PDF
-├── models/                <- modelos serializados (no versionado)
+├── examples/api/          <- peticiones de ejemplo para la API (registros reales de test)
+├── models/                <- modelos serializados; models/api/ = champions de la imagen (no versionado)
 ├── notebooks
 │   └── 1.0-dfc-exploracion-mibici.ipynb   <- exploración (solo análisis)
 ├── references
@@ -59,7 +62,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   ├── validacion_datos.md                 <- hallazgos de DeepChecks por pregunta
 │   ├── seguridad/         <- salida de bandit, pip-audit y la revisión del historial
 │   ├── deepchecks/        <- reportes HTML de make validate (no versionado)
-│   └── figures/           <- capturas de MLflow, DeepChecks, pruebas y seguridad
+│   └── figures/           <- capturas de MLflow, DeepChecks, pruebas, seguridad y la API
 ├── scripts
 │   └── run_experiments.sh <- todos los runs de la entrega y el registro de champions
 ├── tests/                 <- pruebas de ingesta, features, modelado, métricas, reproducibilidad y validación
@@ -69,6 +72,10 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
     ├── features.py        <- feature engineering de P1, P2 y P3 (CLI)
     ├── validation.py      <- validación de datos con DeepChecks (CLI)
     ├── plots.py           <- gráficas que se registran como artefactos
+    ├── api
+    │   ├── main.py        <- API REST (FastAPI): /health, /models, /predict/p1, p2 y p3
+    │   ├── schemas.py     <- esquemas de entrada y salida (Pydantic)
+    │   └── registry.py    <- carga del registry o empaquetada (CLI de make api-models)
     └── modeling
         ├── train.py       <- entrena un modelo (punto de entrada train)
         ├── search.py      <- búsqueda con nested runs (punto de entrada search)
@@ -209,106 +216,134 @@ Las cifras de P2 cambiaron ligeramente respecto a la primera entrega: el [PR #12
 
 ## API REST con FastAPI y Podman
 
-El proyecto expone los modelos P1, P2 y P3 registrados en MLflow mediante una API REST desarrollada con FastAPI y desplegada en un contenedor Podman.
+Los champions de P1, P2 y P3 se sirven con una API REST de [FastAPI](https://fastapi.tiangolo.com/) (`mibici/api/`) empaquetada en un contenedor OCI (`Containerfile`). El mismo archivo sirve para **Podman** y para **Docker**: en los comandos basta cambiar `podman` por `docker` (o `make api-build CONTAINER=docker`).
 
-### Requisitos
+### Estrategia de despliegue
 
-- Podman instalado y con su máquina virtual en ejecución.
-- Modelos registrados en MLflow con el alias `champion`.
-- Servidor MLflow disponible en el puerto 5001.
-- Artefactos de los modelos disponibles en el directorio `mlartifacts/`.
+**Inferencia en línea (tiempo real) por petición HTTP, con lotes pequeños por petición.** Cada pregunta produce una decisión operativa que se consulta al momento:
 
-### Construir la imagen
+- **P2 (riesgo de desbalance en el siguiente bloque de 3 h)** es la que justifica el servicio en línea: el equipo de rebalanceo consulta antes de cada bloque qué estaciones van a quedar vacías o llenas, con los flujos de las últimas horas. Una predicción por lotes calculada la noche anterior no tendría los lags del bloque anterior (`net_flow_lag1`, `departures_lag1`).
+- **P1 (viajes del día siguiente)** y **P3 (grupo de la estación)** cambian una vez al día o menos. Pueden consumir la misma API (un tablero que pide las ~480 estaciones en una petición, hasta 1000 registros), y para el periodo de test completo sigue estando la ruta por lotes `make predict Q=p1`.
 
-Desde la raíz del repositorio:
+Los modelos son pequeños (≈3 MB) y responden en milisegundos, así que un solo contenedor sin GPU alcanza. La API no calcula features: recibe las variables ya construidas, igual que en `mibici/features.py`. Calcularlas en línea a partir de los viajes es parte de la arquitectura de la siguiente entrega.
 
-```bash
-podman build -t mibici-api:1.0 .
-```
+### De dónde sale el modelo
 
-### Iniciar el servidor MLflow
+La API carga cada modelo por **nombre y alias del Model Registry** (`mibici-equipo34-p1-demanda@champion`, etc.) y responde con la **versión** que resolvió. Tiene dos fuentes, en este orden (`mibici/api/registry.py`):
 
-En una primera terminal:
-
-```bash
-export MLFLOW_SERVER_ALLOWED_HOSTS="localhost,localhost:5001,127.0.0.1,127.0.0.1:5001,host.containers.internal,host.containers.internal:5001"
-
-.venv/bin/mlflow server \
-  --backend-store-uri sqlite:///mlflow.db \
-  --port 5001
-```
-
-El servidor utiliza SQLite para el tracking y permite consultar el Model Registry.
-
-### Ejecutar el contenedor
-
-En una segunda terminal:
-
-```bash
-podman run --rm \
-  --name mibici-api \
-  -p 8000:8000 \
-  -e MLFLOW_TRACKING_URI=http://host.containers.internal:5001 \
-  -v "$(pwd)/mlartifacts:/Users/mar/Documents/GitHub/TC5061-Proyecto-Equipo34/mlartifacts" \
-  mibici-api:1.0
-```
-
-**Nota:** la ruta de destino del volumen debe coincidir con la ruta absoluta de almacenamiento de artefactos registrada en MLflow. El ejemplo corresponde al entorno donde se desarrolló y probó la API. En otros equipos debe ajustarse a la ruta registrada localmente. El volumen se monta con permisos de escritura porque MLflow puede necesitar crear metadatos auxiliares.
-
-### Endpoints disponibles
-
-| Método | Endpoint | Descripción |
+| Fuente | Cómo | Cuándo usarla |
 |---|---|---|
-| GET | `/` | Información general de la API |
-| GET | `/health` | Estado del servicio |
-| GET | `/models` | Modelos registrados y alias disponibles |
-| POST | `/predict/p1` | Predicciones del modelo P1 |
-| POST | `/predict/p2` | Predicciones del modelo P2 |
-| POST | `/predict/p3` | Predicciones del modelo P3 |
+| `packaged` (**opción elegida**) | `make api-models` descarga `models:/<nombre>@champion` a `models/api/<pregunta>/champion/` junto con `registry.json` (nombre, versión, run de origen) y el `Containerfile` lo copia a la imagen. | Entrega y cualquier otra máquina: la imagen funciona sin servidor de MLflow, sin volúmenes y sin depender de la ruta absoluta de `mlartifacts/` de quien entrenó. |
+| `registry` | Si no hay copia en la imagen, se resuelve el alias en `MLFLOW_TRACKING_URI` y se descarga `models:/<nombre>/<versión>`. | Cambiar de champion sin reconstruir la imagen. |
 
-La documentación interactiva está disponible en:
+Elegimos `packaged` porque la imagen queda inmutable y reproducible: una imagen corresponde a una versión concreta de cada modelo, y lo que se probó es lo que se despliega. Para cambiar de champion se vuelve a correr `make api-models` y se construye una imagen nueva.
 
-```text
-http://localhost:8000/docs
+### Construir y levantar el contenedor
+
+Requisitos: Podman (en macOS y Windows, con `podman machine start`) o Docker; y, solo para el primer paso, el servidor de MLflow con los champions registrados (`make mlflow-server` y `make experiments`).
+
+```bash
+# 1. Copiar los champions del registry a models/api/ (necesita el servidor de MLflow)
+make api-models                                  # python -m mibici.api.registry --alias champion
+
+# 2. Construir la imagen
+podman build -f Containerfile -t mibici-api:1.1 .      # o: make api-build
+
+# 3. Levantar la API (ya no necesita el servidor de MLflow)
+podman run --rm --name mibici-api -p 8000:8000 mibici-api:1.1    # o: make api-run
 ```
 
-### Formato de solicitud
+La documentación interactiva (Swagger) queda en <http://localhost:8000/docs>. La imagen parte de `python:3.12-slim`, instala `requirements-api.txt` (las mismas versiones con que se entrenaron los modelos), corre con un usuario sin privilegios y declara un `HEALTHCHECK` sobre `/health` (Docker lo usa siempre; Podman, con `podman build --format docker`).
 
-Los endpoints de predicción reciben un objeto JSON con una lista de registros:
+**Variante `registry`** (sin `make api-models`): el servidor debe aceptar el nombre de host del contenedor y servir los artefactos por HTTP (`--artifacts-destination`). Si los artefactos se registraron con una ruta local (`file:///...`), el contenedor no puede leerlos; en ese caso hay que usar la opción `packaged`.
+
+```bash
+mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlartifacts --port 5001 \
+  --allowed-hosts "localhost,localhost:5001,127.0.0.1,127.0.0.1:5001,host.containers.internal,host.containers.internal:5001"
+
+podman run --rm -p 8000:8000 -e MIBICI_MODELS_DIR=/tmp/sin-modelos \
+  -e MLFLOW_TRACKING_URI=http://host.containers.internal:5001 mibici-api:1.1
+# Docker: host.docker.internal en lugar de host.containers.internal
+```
+
+### Endpoints
+
+| Método | Endpoint | Entrada | Salida (`predictions`) |
+|---|---|---|---|
+| GET | `/health` | — | `{"status": "ok"}` |
+| GET | `/models` | — | nombre, alias y descripción de cada modelo |
+| POST | `/predict/p1` | estación-día: lags y medias móviles de salidas y llegadas, calendario, capacidad y ubicación (16 variables) | viajes esperados (número ≥ 0) |
+| POST | `/predict/p2` | estación y bloque de 3 h: bloque, calendario, flujos netos y salidas rezagadas, riesgo rezagado (17 variables) | `1` = riesgo de desbalance, `0` = sin riesgo (umbral elegido en validación) |
+| POST | `/predict/p3` | perfil de la estación: 48 fracciones horarias (hábil y fin de semana), volumen, balance, fin de semana y duración (52 variables) | grupo de uso (entero ≥ 0) |
+
+Todos los `POST` reciben `{"records": [...]}` con 1 a 1000 registros y aceptan `?alias=challenger` para consultar la otra versión registrada.
+
+### Validación de entradas y salidas
+
+Los esquemas están en `mibici/api/schemas.py` (Pydantic): uno por pregunta, con las mismas variables que la firma del modelo en MLflow. La API responde **422** con el campo y el motivo si un registro:
+
+- no trae todas las variables, o trae una que el modelo no usa (`extra="forbid"`; por ejemplo, `departures_lag_7` mal escrito);
+- tiene un valor fuera de rango o de otro tipo: `dow` fuera de 0-6, `month` fuera de 1-12, indicadores distintos de 0/1, conteos negativos, `block` fuera de 0-5, fracciones fuera de 0-1, coordenadas imposibles;
+- (P3) tiene un perfil horario que no suma 1.
+
+La respuesta también se valida (`response_model`): si un modelo devolviera algo distinto de 0/1 en P2 o viajes negativos en P1, la API responde 500 en lugar de entregar un valor inválido. Si el modelo no se puede cargar, responde **503**.
+
+### Ejemplo de petición y respuesta
+
+Los archivos de `examples/api/` son registros reales del periodo de test (31 de agosto de 2026); las pruebas verifican que cumplen el esquema. P1 con las estaciones 2 y 3:
+
+```bash
+curl -X POST http://localhost:8000/predict/p1 \
+  -H "Content-Type: application/json" \
+  -d @examples/api/p1.json
+```
 
 ```json
 {
   "records": [
     {
-      "feature_1": 10.0,
-      "feature_2": 20.0
-    }
+      "departures_lag1": 29.0, "departures_lag2": 52.0, "departures_lag7": 49.0, "departures_lag14": 46.0,
+      "departures_roll7_mean": 51.571429, "departures_roll28_mean": 50.928571,
+      "arrivals_lag1": 32.0, "arrivals_lag7": 55.0, "arrivals_roll7_mean": 57.0,
+      "dow": 0, "month": 8, "is_weekend": 0, "is_holiday": 0,
+      "capacity": 15, "latitude": 20.666378, "longitude": -103.34882
+    },
+    { "...": "segunda estación, mismas 16 variables" }
   ]
 }
 ```
 
-Las variables deben corresponder al esquema de entrada del modelo solicitado. La API valida las columnas requeridas y convierte los tipos de datos según la firma registrada en MLflow.
+Respuesta (ese día la estación 2 tuvo 56 viajes y la 3, 43):
 
-### Verificación
-
-```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/models
+```json
+{
+  "question": "p1",
+  "model": "mibici-equipo34-p1-demanda",
+  "alias": "champion",
+  "version": "1",
+  "source": "packaged",
+  "total_predictions": 2,
+  "predictions": [54.637542205829845, 49.31169431694952]
+}
 ```
 
-Para probar una predicción, se puede utilizar Swagger (`/docs`) o enviar una solicitud POST con las variables correspondientes al modelo.
+Las otras preguntas se consultan igual con `examples/api/p2.json` (respuesta `"predictions": [1, 0]`: la estación 4 a las 15:00, que sí tuvo riesgo, y la estación 2 a las 06:00) y `examples/api/p3.json`. Una petición inválida (`examples/api/p1_invalido.json`, con `dow = 9`) devuelve:
 
-La API utiliza el alias `champion` por defecto y devuelve las predicciones junto con el modelo utilizado y el número de resultados generados.
+```json
+{"detail": [{"type": "less_than_equal", "loc": ["body", "records", 0, "dow"], "msg": "Input should be less than or equal to 6", "input": 9, "ctx": {"le": 6}}]}
+```
+
+La captura muestra el contenedor `mibici-api:1.1` en ejecución (`healthy`) respondiendo a P1, P2, P3 y a la petición inválida. Se tomó con Docker; con Podman los comandos y las respuestas son los mismos.
+
+![API respondiendo desde el contenedor](reports/figures/api/api_contenedor.png)
 
 ### Pruebas de la API
 
-Las pruebas automatizadas de la API se ejecutan sin necesidad de cargar modelos reales ni iniciar el servidor MLflow:
+`tests/test_api.py` prueba los endpoints sin servidor de MLflow ni datos de MiBici: modelos simulados para P1, P2 y P3, todos los casos de validación de arriba, el orden y los tipos de columnas que recibe el modelo, la validación de la salida y la carga de un modelo empaquetado real (scikit-learn guardado con MLflow) sin acceso al registry. Corren con el resto de la suite:
 
 ```bash
 python -m pytest tests/test_api.py -v
 ```
-
-Estas pruebas utilizan modelos simulados para verificar los endpoints, las validaciones de entrada y el manejo de errores.
 
 ## Pruebas
 
@@ -325,7 +360,7 @@ python -m pytest tests -v    # con el nombre de cada prueba
 | `test_features.py` | Pascua (días festivos), lags y medias móviles, partición temporal y etiqueta de riesgo de P2 | Un lag menor al horizonte se rechaza (evita fuga de información); los lags no mezclan estaciones; umbral exacto de media capacidad |
 | `test_metrics.py` | Métricas de P1, P2 y P3, umbral de F1, `ThresholdClassifier`, bloques de 3 h y versión de datos | Predicción perfecta; WAPE sin viajes (0/0); un modelo que nunca predice riesgo; validación con una sola clase; clustering de un solo grupo; viajes a las 5:59, 6:00 y 23:59; manifiesto en otro orden |
 | `test_modeling.py` | Hiperparámetros desde `-P params` y mallas de búsqueda | Parámetros vacíos, desconocidos o con número inválido; mallas mal escritas |
-| `test_api.py` | Endpoints REST, predicciones simuladas para P1, P2 y P3, validación de entradas y manejo de errores | Modelo desconocido, variables faltantes, registros vacíos y errores de carga desde MLflow |
+| `test_api.py` | Endpoints REST, esquemas de P1, P2 y P3, validación de entradas y salidas, carga de modelos empaquetados | Variables faltantes, de más o fuera de rango; perfil de P3 que no suma 1; salida inválida del modelo; registros vacíos; MLflow no disponible |
 | `test_reproducibility.py` | **Reproducibilidad:** entrenar dos veces con `SEED` da las mismas predicciones | HGB y random forest de P1 y P2, MiniBatchKMeans y mezcla de gaussianas de P3; control: con otros datos el modelo sí cambia |
 | `test_validation.py` | Las suites de DeepChecks detectan nulos, duplicados, columnas constantes y drift | Columna constante conocida (excepción declarada) contra una nueva |
 
