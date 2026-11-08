@@ -27,7 +27,7 @@ from mibici.config import REGISTERED_MODEL_DESCRIPTIONS, REGISTERED_MODEL_NAMES
 app = FastAPI(
     title="MiBici API",
     description="API REST para inferencia de los modelos P1, P2 y P3 del Equipo 34.",
-    version="1.1.0",
+    version="1.2.0",
 )
 
 ALIAS = Query(

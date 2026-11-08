@@ -118,7 +118,7 @@ class PredictionResponse(BaseModel):
     alias: str
     version: str = Field(description="Versión del Model Registry que respondió.")
     source: Literal["registry", "packaged"] = Field(
-        description="registry: descargado del servidor MLflow; packaged: copiado en la imagen."
+        description="registry: descargado del servidor MLflow; packaged: copia local en disco."
     )
     total_predictions: int = Field(ge=0)
 
