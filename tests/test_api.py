@@ -256,3 +256,32 @@ def test_packaged_model_is_loaded_without_mlflow_server(monkeypatch, tmp_path):
     assert result["version"] == "3"
     expected = estimator.predict(pd.DataFrame(records)[X.columns])
     np.testing.assert_allclose(result["predictions"], expected, rtol=1e-6)
+
+
+def test_model_is_loaded_from_registry_by_alias(monkeypatch, tmp_path):
+    """Sin copia local (como en el contenedor), el alias se resuelve en el registry."""
+    loaded_uris = []
+
+    class FakeClient:
+        def get_model_version_by_alias(self, name, alias):
+            assert (name, alias) == (REGISTERED_MODEL_NAMES["p1"], "champion")
+            return type("ModelVersion", (), {"version": "5"})()
+
+    def fake_load(uri):
+        loaded_uris.append(uri)
+        return FakeModel("p1")
+
+    monkeypatch.setattr(registry, "API_MODELS_DIR", tmp_path)
+    monkeypatch.setattr(registry, "MlflowClient", FakeClient)
+    monkeypatch.setattr(registry.mlflow.pyfunc, "load_model", fake_load)
+    registry.load_model.cache_clear()
+
+    try:
+        response = client.post("/predict/p1", json=example("p1"))
+    finally:
+        registry.load_model.cache_clear()
+
+    assert response.status_code == 200
+    assert loaded_uris == [f"models:/{REGISTERED_MODEL_NAMES['p1']}/5"]
+    assert response.json()["source"] == "registry"
+    assert response.json()["version"] == "5"
