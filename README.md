@@ -129,7 +129,8 @@ make predict Q=p1                                              # predicciones de
 **Sin `make` (Windows con Git Bash).** Los mismos pasos con `mlflow run` directo; el script lee `MLFLOW_TRACKING_URI` y `ENV_MANAGER` igual que el Makefile:
 
 ```bash
-mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlartifacts --port 5001   # terminal 1
+mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlartifacts --port 5001 \
+  --allowed-hosts "localhost,localhost:5001,127.0.0.1,127.0.0.1:5001,host.containers.internal,host.containers.internal:5001,host.docker.internal,host.docker.internal:5001"   # terminal 1
 export MLFLOW_TRACKING_URI=http://127.0.0.1:5001                      # terminal 2
 mlflow run . -e ingest --env-manager uv --experiment-name mibici-equipo34
 bash scripts/run_experiments.sh                                       # experimentos y registro
@@ -357,7 +358,7 @@ python -m pytest tests -v    # con el nombre de cada prueba
 | `test_features.py` | Pascua (días festivos), lags y medias móviles, partición temporal y etiqueta de riesgo de P2 | Un lag menor al horizonte se rechaza (evita fuga de información); los lags no mezclan estaciones; umbral exacto de media capacidad |
 | `test_metrics.py` | Métricas de P1, P2 y P3, umbral de F1, `ThresholdClassifier`, bloques de 3 h y versión de datos | Predicción perfecta; WAPE sin viajes (0/0); un modelo que nunca predice riesgo; validación con una sola clase; clustering de un solo grupo; viajes a las 5:59, 6:00 y 23:59; manifiesto en otro orden |
 | `test_modeling.py` | Hiperparámetros desde `-P params` y mallas de búsqueda | Parámetros vacíos, desconocidos o con número inválido; mallas mal escritas |
-| `test_api.py` | Endpoints REST, esquemas de P1, P2 y P3, validación de entradas y salidas, carga de modelos empaquetados | Variables faltantes, de más o fuera de rango; perfil de P3 que no suma 1; salida inválida del modelo; registros vacíos; MLflow no disponible |
+| `test_api.py` | Endpoints REST, esquemas de P1, P2 y P3, validación de entradas y salidas, carga desde el registry por alias o desde una copia local | Variables faltantes, de más o fuera de rango; perfil de P3 que no suma 1; salida inválida del modelo; registros vacíos; MLflow no disponible |
 | `test_reproducibility.py` | **Reproducibilidad:** entrenar dos veces con `SEED` da las mismas predicciones | HGB y random forest de P1 y P2, MiniBatchKMeans y mezcla de gaussianas de P3; control: con otros datos el modelo sí cambia |
 | `test_validation.py` | Las suites de DeepChecks detectan nulos, duplicados, columnas constantes y drift | Columna constante conocida (excepción declarada) contra una nueva |
 
