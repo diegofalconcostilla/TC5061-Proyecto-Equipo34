@@ -1,28 +1,27 @@
 # Imagen de la API de MiBici (OCI: funciona con podman build y con docker build).
 #
-#   make api-models                        # copia los champions del Model Registry a models/api/
-#   podman build -t mibici-api:1.1 .
-#   podman run --rm -p 8000:8000 mibici-api:1.1
+#   make mlflow-server                     # registry local que sirve los artefactos por HTTP
+#   podman build -t mibici-api:1.2 .
+#   podman run --rm -p 8000:8000 mibici-api:1.2
 #
-# Si models/api/ está vacío, la API descarga los modelos de MLFLOW_TRACKING_URI (ver README).
+# La imagen no lleva modelos: los descarga del Model Registry en MLFLOW_TRACKING_URI (ver README).
 FROM python:3.12-slim
 
 WORKDIR /app
 
+# host.containers.internal es la máquina anfitriona vista desde Podman; con Docker se sobrescribe
+# con -e MLFLOW_TRACKING_URI=http://host.docker.internal:5001 (make api-run CONTAINER=docker).
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    MIBICI_MODELS_DIR=/app/models/api \
+    MLFLOW_TRACKING_URI=http://host.containers.internal:5001 \
     MLFLOW_DISABLE_AGENT_HINT=1
 
 # Dependencias primero: la capa se reutiliza mientras no cambie requirements-api.txt.
 COPY requirements-api.txt pyproject.toml README.md LICENSE ./
 COPY mibici ./mibici
 RUN pip install -r requirements-api.txt
-
-# Modelos descargados del registry (models/.gitkeep existe siempre, así que el COPY no falla).
-COPY models ./models
 
 # Sin privilegios de root dentro del contenedor.
 RUN useradd --create-home --uid 10001 api

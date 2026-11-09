@@ -2,18 +2,16 @@
 
 Hay dos fuentes, en este orden:
 
-1. ``packaged``: copia local en ``API_MODELS_DIR/<pregunta>/<alias>/`` (en la imagen,
-   ``/app/models/api``), descargada antes del ``podman build`` con::
+1. ``packaged``: copia local en ``API_MODELS_DIR/<pregunta>/<alias>/``, descargada con::
 
-       python -m mibici.api.registry --alias champion      # o: make api-models
+       python -m mibici.api.registry --alias champion
 
-   La copia guarda en ``registry.json`` el nombre, la versión y el run de origen.
+   La copia guarda en ``registry.json`` el nombre, la versión y el run de origen. Sirve para
+   correr ``uvicorn`` fuera del contenedor sin servidor de MLflow; la imagen no la incluye
+   (``.containerignore`` excluye ``models/``).
 2. ``registry``: ``models:/<nombre>/<versión>`` desde ``MLFLOW_TRACKING_URI``, resolviendo
-   primero qué versión tiene el alias.
-
-La primera hace que la imagen funcione igual en cualquier máquina, sin servidor de MLflow ni
-volúmenes con la ruta absoluta de ``mlartifacts``; la segunda permite cambiar de champion sin
-reconstruir la imagen.
+   primero qué versión tiene el alias. Es la fuente del contenedor: cambiar de champion en el
+   registry no requiere reconstruir la imagen, solo reiniciar el contenedor.
 """
 
 from __future__ import annotations

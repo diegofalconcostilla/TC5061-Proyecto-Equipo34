@@ -177,15 +177,16 @@ REGISTERED_MODEL_DESCRIPTIONS = {
 # ---------------------------------------------------------------------------
 TEAM = "equipo34"
 MLFLOW_EXPERIMENT_NAME = f"mibici-{TEAM}"
-# Servidor local: mlflow server --backend-store-uri sqlite:///mlflow.db --port 5001
-# (el puerto 5000 lo ocupa AirPlay en macOS). mlflow run exporta esta variable al proceso.
+# Servidor local: make mlflow-server (puerto 5001; el 5000 lo ocupa AirPlay en macOS). Sirve los
+# artefactos por HTTP para que el contenedor de la API pueda descargar los modelos.
+# mlflow run exporta esta variable al proceso.
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
 
 # ---------------------------------------------------------------------------
 # API REST (mibici/api)
 # ---------------------------------------------------------------------------
-# Modelos descargados del Model Registry con `make api-models`; el Containerfile los copia a la
-# imagen. Si no hay copia local de un modelo, la API lo descarga de MLFLOW_TRACKING_URI.
+# Copia local opcional para correr la API fuera del contenedor (python -m mibici.api.registry).
+# Si no hay copia de un modelo, la API lo descarga de MLFLOW_TRACKING_URI, como en la imagen.
 API_MODELS_DIR = Path(os.environ.get("MIBICI_MODELS_DIR", MODELS_DIR / "api"))
 
 # ---------------------------------------------------------------------------

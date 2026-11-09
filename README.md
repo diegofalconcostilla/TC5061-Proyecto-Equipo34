@@ -38,7 +38,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ├── .env.example           <- variables de entorno configurables (copiar a .env, que no se versiona)
 ├── MLproject              <- MLflow Project: ingest, train, search y register
 ├── python_env.yaml        <- entorno del MLflow Project (Python 3.12 + requirements.txt)
-├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate | security | api-models | api-build | api-run
+├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate | security | api-build | api-run
 ├── Containerfile          <- imagen OCI de la API (podman build o docker build)
 ├── README.md
 ├── requirements.txt       <- dependencias con versión fija
@@ -51,7 +51,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   └── processed/         <- datasets de P1, P2 y P3 (no versionado)
 ├── docs/                  <- propuesta (entrega 1) y reporte de MLflow (entrega 2) en PDF
 ├── examples/api/          <- peticiones de ejemplo para la API (registros reales de test)
-├── models/                <- modelos serializados; models/api/ = champions de la imagen (no versionado)
+├── models/                <- copias locales opcionales de modelos (no versionado; la imagen no las incluye)
 ├── notebooks
 │   └── 1.0-dfc-exploracion-mibici.ipynb   <- exploración (solo análisis)
 ├── references
@@ -75,7 +75,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
     ├── api
     │   ├── main.py        <- API REST (FastAPI): /health, /models, /predict/p1, p2 y p3
     │   ├── schemas.py     <- esquemas de entrada y salida (Pydantic)
-    │   └── registry.py    <- carga del registry o empaquetada (CLI de make api-models)
+    │   └── registry.py    <- carga los modelos del Model Registry por nombre y alias
     └── modeling
         ├── train.py       <- entrena un modelo (punto de entrada train)
         ├── search.py      <- búsqueda con nested runs (punto de entrada search)
@@ -110,9 +110,11 @@ Si ya tenías el entorno de la entrega 2, vuelve a correr `pip install -r requir
 Todo corre como MLflow Project contra un servidor de tracking local con SQLite. El servidor usa el puerto **5001** porque en macOS el 5000 lo ocupa AirPlay (Receptor AirPlay en Ajustes > General > AirDrop y Handoff). El código lee el servidor de `MLFLOW_TRACKING_URI` (por defecto `http://127.0.0.1:5001`).
 
 ```bash
-make mlflow-server        # terminal 1: mlflow server --backend-store-uri sqlite:///mlflow.db --port 5001
+make mlflow-server        # terminal 1: servidor con artefactos servidos por HTTP (ver abajo)
 make all                  # terminal 2: ingesta (~5 min) + todos los experimentos + registro (~6 min)
 ```
+
+`make mlflow-server` arranca el servidor con `--artifacts-destination ./mlartifacts`: los modelos quedan registrados como `mlflow-artifacts:/...` y el servidor los entrega por HTTP, que es lo que necesita el contenedor de la API para descargarlos (ver [API REST](#api-rest-con-fastapi-y-podman)). Un registry creado con un servidor sin esa opción guarda rutas `file:///` de la máquina de quien entrenó, que el contenedor no puede leer; en ese caso hay que volver a correr `make all` con un `mlflow.db` nuevo.
 
 `make all` equivale a `mlflow run . -e ingest` seguido de `scripts/run_experiments.sh`. Comandos sueltos:
 
@@ -127,7 +129,8 @@ make predict Q=p1                                              # predicciones de
 **Sin `make` (Windows con Git Bash).** Los mismos pasos con `mlflow run` directo; el script lee `MLFLOW_TRACKING_URI` y `ENV_MANAGER` igual que el Makefile:
 
 ```bash
-mlflow server --backend-store-uri sqlite:///mlflow.db --port 5001     # terminal 1
+mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlartifacts --port 5001 \
+  --allowed-hosts "localhost,localhost:5001,127.0.0.1,127.0.0.1:5001,host.containers.internal,host.containers.internal:5001,host.docker.internal,host.docker.internal:5001"   # terminal 1
 export MLFLOW_TRACKING_URI=http://127.0.0.1:5001                      # terminal 2
 mlflow run . -e ingest --env-manager uv --experiment-name mibici-equipo34
 bash scripts/run_experiments.sh                                       # experimentos y registro
@@ -229,42 +232,33 @@ Los modelos son pequeños (≈3 MB) y responden en milisegundos, así que un sol
 
 ### De dónde sale el modelo
 
-La API carga cada modelo por **nombre y alias del Model Registry** (`mibici-equipo34-p1-demanda@champion`, etc.) y responde con la **versión** que resolvió. Tiene dos fuentes, en este orden (`mibici/api/registry.py`):
+**Opción elegida: el contenedor descarga los modelos del Model Registry de MLflow; la imagen no lleva modelos.** Al recibir la primera petición de cada pregunta, la API resuelve el alias (`mibici-equipo34-p1-demanda@champion`, etc.) en el servidor de `MLFLOW_TRACKING_URI`, descarga `models:/<nombre>/<versión>` y responde con la **versión** que usó y `"source": "registry"` (`mibici/api/registry.py`). El modelo queda en memoria para las siguientes peticiones.
 
-| Fuente | Cómo | Cuándo usarla |
-|---|---|---|
-| `packaged` (**opción elegida**) | `make api-models` descarga `models:/<nombre>@champion` a `models/api/<pregunta>/champion/` junto con `registry.json` (nombre, versión, run de origen) y el `Containerfile` lo copia a la imagen. | Entrega y cualquier otra máquina: la imagen funciona sin servidor de MLflow, sin volúmenes y sin depender de la ruta absoluta de `mlartifacts/` de quien entrenó. |
-| `registry` | Si no hay copia en la imagen, se resuelve el alias en `MLFLOW_TRACKING_URI` y se descarga `models:/<nombre>/<versión>`. | Cambiar de champion sin reconstruir la imagen. |
+- **Por qué.** El registry es la única fuente de verdad de qué modelo está en producción: la imagen contiene solo código y dependencias, y para promover un challenger basta con mover el alias en MLflow y reiniciar el contenedor, sin reconstruir la imagen. `.containerignore` excluye `models/`, así que ninguna copia local entra a la imagen por accidente.
+- **Dónde está el registry.** `MLFLOW_TRACKING_URI` vale por defecto `http://host.containers.internal:5001`, el servidor de MLflow que corre en la máquina anfitriona vista desde Podman. Con Docker el nombre es `host.docker.internal` (`make api-run CONTAINER=docker` lo cambia solo).
+- **Requisito del servidor.** Debe servir los artefactos por HTTP (`--artifacts-destination`) y aceptar el nombre de host del contenedor (`--allowed-hosts`); `make mlflow-server` ya arranca así. Los modelos tienen que haberse registrado con ese servidor, de modo que su ubicación sea `mlflow-artifacts:/...`: si el registry guarda rutas `file:///` de otra máquina, el contenedor no puede leerlas y responde 503 (ver [Reproducir el experimento](#reproducir-el-experimento)).
 
-Elegimos `packaged` porque la imagen queda inmutable y reproducible: una imagen corresponde a una versión concreta de cada modelo, y lo que se probó es lo que se despliega. Para cambiar de champion se vuelve a correr `make api-models` y se construye una imagen nueva.
+Para correr la API fuera del contenedor sin servidor de MLflow, `python -m mibici.api.registry --alias champion` copia los champions a `models/api/` y la API los carga desde ahí (`"source": "packaged"`). Es solo para desarrollo local.
 
 ### Construir y levantar el contenedor
 
-Requisitos: Podman (en macOS y Windows, con `podman machine start`) o Docker; y, solo para el primer paso, el servidor de MLflow con los champions registrados (`make mlflow-server` y `make experiments`).
+Requisitos: Podman (en macOS y Windows, primero `podman machine init` y `podman machine start`) o Docker, y el servidor de MLflow con los champions registrados (`make mlflow-server` y `make all`, ver [Reproducir el experimento](#reproducir-el-experimento)).
 
 ```bash
-# 1. Copiar los champions del registry a models/api/ (necesita el servidor de MLflow)
-make api-models                                  # python -m mibici.api.registry --alias champion
+# 1. Servidor de MLflow en la máquina anfitriona (terminal aparte; sirve los modelos por HTTP)
+make mlflow-server
 
-# 2. Construir la imagen
-podman build -f Containerfile -t mibici-api:1.1 .      # o: make api-build
+# 2. Construir la imagen (solo código y dependencias, sin modelos)
+podman build --format docker -f Containerfile -t mibici-api:1.2 .      # o: make api-build
 
-# 3. Levantar la API (ya no necesita el servidor de MLflow)
-podman run --rm --name mibici-api -p 8000:8000 mibici-api:1.1    # o: make api-run
+# 3. Levantar la API apuntando al registry de la máquina anfitriona
+podman run --rm --name mibici-api -p 8000:8000 \
+  -e MLFLOW_TRACKING_URI=http://host.containers.internal:5001 mibici-api:1.2   # o: make api-run
 ```
 
-La documentación interactiva (Swagger) queda en <http://localhost:8000/docs>. La imagen parte de `python:3.12-slim`, instala `requirements-api.txt` (las mismas versiones con que se entrenaron los modelos), corre con un usuario sin privilegios y declara un `HEALTHCHECK` sobre `/health` (Docker lo usa siempre; Podman, con `podman build --format docker`).
+Con Docker: `docker build -f Containerfile -t mibici-api:1.2 .` y `docker run --rm --name mibici-api -p 8000:8000 -e MLFLOW_TRACKING_URI=http://host.docker.internal:5001 mibici-api:1.2` (o `make api-build api-run CONTAINER=docker`).
 
-**Variante `registry`** (sin `make api-models`): el servidor debe aceptar el nombre de host del contenedor y servir los artefactos por HTTP (`--artifacts-destination`). Si los artefactos se registraron con una ruta local (`file:///...`), el contenedor no puede leerlos; en ese caso hay que usar la opción `packaged`.
-
-```bash
-mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlartifacts --port 5001 \
-  --allowed-hosts "localhost,localhost:5001,127.0.0.1,127.0.0.1:5001,host.containers.internal,host.containers.internal:5001"
-
-podman run --rm -p 8000:8000 -e MIBICI_MODELS_DIR=/tmp/sin-modelos \
-  -e MLFLOW_TRACKING_URI=http://host.containers.internal:5001 mibici-api:1.1
-# Docker: host.docker.internal en lugar de host.containers.internal
-```
+La documentación interactiva (Swagger) queda en <http://localhost:8000/docs>. La imagen parte de `python:3.12-slim`, instala `requirements-api.txt` (las mismas versiones con que se entrenaron los modelos), corre con un usuario sin privilegios y declara un `HEALTHCHECK` sobre `/health` (Docker lo usa siempre; Podman, con `--format docker`, que `make api-build` ya agrega). Si el servidor de MLflow no está disponible, `/health` responde igual y los endpoints de predicción devuelven 503 con el motivo.
 
 ### Endpoints
 
@@ -321,7 +315,7 @@ Respuesta (ese día la estación 2 tuvo 56 viajes y la 3, 43):
   "model": "mibici-equipo34-p1-demanda",
   "alias": "champion",
   "version": "1",
-  "source": "packaged",
+  "source": "registry",
   "total_predictions": 2,
   "predictions": [54.637542205829845, 49.31169431694952]
 }
@@ -333,13 +327,17 @@ Las otras preguntas se consultan igual con `examples/api/p2.json` (respuesta `"p
 {"detail": [{"type": "less_than_equal", "loc": ["body", "records", 0, "dow"], "msg": "Input should be less than or equal to 6", "input": 9, "ctx": {"le": 6}}]}
 ```
 
-La captura muestra el contenedor `mibici-api:1.1` en ejecución (`healthy`) respondiendo a P1, P2, P3 y a la petición inválida. Se tomó con Docker; con Podman los comandos y las respuestas son los mismos.
+`?alias=challenger` consulta la otra versión registrada: con `examples/api/p2.json` responde `"alias": "challenger", "version": "2"`.
 
-![API respondiendo desde el contenedor](reports/figures/api/api_contenedor.png)
+La captura muestra el contenedor `mibici-api:1.2` corriendo con Podman (`healthy`): `/app` no tiene carpeta de modelos, `MLFLOW_TRACKING_URI` apunta al servidor de la máquina anfitriona y P1, P2 y P3 responden con `"source": "registry"` y la versión del champion; la petición inválida devuelve 422.
+
+![API respondiendo desde el contenedor con Podman](reports/figures/api/api_contenedor_podman.png)
+
+Capturas anteriores del equipo: la versión 1.1 con los modelos copiados en la imagen, corriendo con Docker ([`api_contenedor.png`](reports/figures/api/api_contenedor.png)), y el build y Swagger con Podman en Windows ([`reports/Podman2.png`](reports/Podman2.png), [`reports/Podma1.png`](reports/Podma1.png)).
 
 ### Pruebas de la API
 
-`tests/test_api.py` prueba los endpoints sin servidor de MLflow ni datos de MiBici: modelos simulados para P1, P2 y P3, todos los casos de validación de arriba, el orden y los tipos de columnas que recibe el modelo, la validación de la salida y la carga de un modelo empaquetado real (scikit-learn guardado con MLflow) sin acceso al registry. Corren con el resto de la suite:
+`tests/test_api.py` prueba los endpoints sin servidor de MLflow ni datos de MiBici: modelos simulados para P1, P2 y P3, todos los casos de validación de arriba, el orden y los tipos de columnas que recibe el modelo, la validación de la salida, la resolución del alias en el registry (`models:/<nombre>/<versión>`, el camino del contenedor) y la carga de una copia local real (scikit-learn guardado con MLflow) sin acceso al registry. Corren con el resto de la suite:
 
 ```bash
 python -m pytest tests/test_api.py -v
@@ -360,7 +358,7 @@ python -m pytest tests -v    # con el nombre de cada prueba
 | `test_features.py` | Pascua (días festivos), lags y medias móviles, partición temporal y etiqueta de riesgo de P2 | Un lag menor al horizonte se rechaza (evita fuga de información); los lags no mezclan estaciones; umbral exacto de media capacidad |
 | `test_metrics.py` | Métricas de P1, P2 y P3, umbral de F1, `ThresholdClassifier`, bloques de 3 h y versión de datos | Predicción perfecta; WAPE sin viajes (0/0); un modelo que nunca predice riesgo; validación con una sola clase; clustering de un solo grupo; viajes a las 5:59, 6:00 y 23:59; manifiesto en otro orden |
 | `test_modeling.py` | Hiperparámetros desde `-P params` y mallas de búsqueda | Parámetros vacíos, desconocidos o con número inválido; mallas mal escritas |
-| `test_api.py` | Endpoints REST, esquemas de P1, P2 y P3, validación de entradas y salidas, carga de modelos empaquetados | Variables faltantes, de más o fuera de rango; perfil de P3 que no suma 1; salida inválida del modelo; registros vacíos; MLflow no disponible |
+| `test_api.py` | Endpoints REST, esquemas de P1, P2 y P3, validación de entradas y salidas, carga desde el registry por alias o desde una copia local | Variables faltantes, de más o fuera de rango; perfil de P3 que no suma 1; salida inválida del modelo; registros vacíos; MLflow no disponible |
 | `test_reproducibility.py` | **Reproducibilidad:** entrenar dos veces con `SEED` da las mismas predicciones | HGB y random forest de P1 y P2, MiniBatchKMeans y mezcla de gaussianas de P3; control: con otros datos el modelo sí cambia |
 | `test_validation.py` | Las suites de DeepChecks detectan nulos, duplicados, columnas constantes y drift | Columna constante conocida (excepción declarada) contra una nueva |
 

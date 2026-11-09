@@ -14,7 +14,10 @@ export ENV_MANAGER ?= uv
 ALIAS ?= champion
 # Motor de contenedores de la API: podman o docker (mismo Containerfile, estándar OCI).
 CONTAINER ?= podman
-API_IMAGE ?= mibici-api:1.1
+API_IMAGE ?= mibici-api:1.2
+# Nombre de la máquina anfitriona dentro del contenedor, donde corre el servidor de MLflow.
+CONTAINER_HOST = $(if $(filter docker,$(CONTAINER)),host.docker.internal,host.containers.internal)
+MLFLOW_ALLOWED_HOSTS = localhost,localhost:$(MLFLOW_PORT),127.0.0.1,127.0.0.1:$(MLFLOW_PORT),host.containers.internal,host.containers.internal:$(MLFLOW_PORT),host.docker.internal,host.docker.internal:$(MLFLOW_PORT)
 MLFLOW_RUN = mlflow run . --env-manager $(ENV_MANAGER) --experiment-name mibici-equipo34
 
 #################################################################################
@@ -102,10 +105,13 @@ help:
 #################################################################################
 
 
-## Levantar el servidor de tracking (SQLite + artefactos en ./mlartifacts)
+## Levantar el servidor de tracking (SQLite + artefactos en ./mlartifacts servidos por HTTP)
+# --artifacts-destination registra los modelos como mlflow-artifacts:/ (y no file:///ruta/local),
+# así el contenedor de la API los descarga del servidor; --allowed-hosts acepta sus peticiones.
 .PHONY: mlflow-server
 mlflow-server:
-	mlflow server --backend-store-uri sqlite:///mlflow.db --port $(MLFLOW_PORT)
+	mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlartifacts \
+		--port $(MLFLOW_PORT) --allowed-hosts "$(MLFLOW_ALLOWED_HOSTS)"
 
 ## Ingesta y features desde el MLflow Project
 .PHONY: ingest
@@ -147,20 +153,16 @@ register:
 predict:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.predict --question $(Q) --alias $(ALIAS)
 
-## Copiar los modelos del Model Registry a models/api/ para la imagen: make api-models [ALIAS=champion]
-.PHONY: api-models
-api-models:
-	$(PYTHON_INTERPRETER) -m mibici.api.registry --alias $(ALIAS)
-
 ## Construir la imagen de la API: make api-build [CONTAINER=docker]
 .PHONY: api-build
 api-build:
-	$(CONTAINER) build -f Containerfile -t $(API_IMAGE) .
+	$(CONTAINER) build $(if $(filter podman,$(CONTAINER)),--format docker) -f Containerfile -t $(API_IMAGE) .
 
-## Levantar la API en http://localhost:8000 (documentación en /docs)
+## Levantar la API en http://localhost:8000 con los modelos del registry (requiere make mlflow-server)
 .PHONY: api-run
 api-run:
-	$(CONTAINER) run --rm --name mibici-api -p 8000:8000 $(API_IMAGE)
+	$(CONTAINER) run --rm --name mibici-api -p 8000:8000 \
+		-e MLFLOW_TRACKING_URI=http://$(CONTAINER_HOST):$(MLFLOW_PORT) $(API_IMAGE)
 
 ## Todos los experimentos y el registro de champions (scripts/run_experiments.sh)
 .PHONY: experiments
