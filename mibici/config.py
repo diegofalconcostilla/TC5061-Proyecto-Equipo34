@@ -190,6 +190,20 @@ MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:50
 API_MODELS_DIR = Path(os.environ.get("MIBICI_MODELS_DIR", MODELS_DIR / "api"))
 
 # ---------------------------------------------------------------------------
+# Monitoreo y reentrenamiento (Evidently y Model Registry)
+# ---------------------------------------------------------------------------
+# Periodos (inicio, fin), ambos incluidos. La justificación está en reports/monitoreo/periodos.md.
+MONITORING_REFERENCE = ("2024-01-01", "2025-12-31")  # con el que se entrenó el champion
+MONITORING_SEASONAL_REFERENCE = ("2025-05-01", "2025-08-31")  # mismos meses, un año antes
+MONITORING_CURRENT = ("2026-05-01", "2026-08-31")  # posterior a todo el entrenamiento
+MONITORING_REPORTS_DIR = REPORTS_DIR / "monitoreo"
+
+# La versión reentrenada ve hasta RETRAIN_END; las fechas posteriores quedan para el A/B.
+RETRAIN_VALID_START = "2026-05-01"  # chequeo interno: entrena antes y valida hasta RETRAIN_END
+RETRAIN_END = "2026-06-30"
+AB_EVAL_START = "2026-07-01"
+
+# ---------------------------------------------------------------------------
 # Validación de datos (DeepChecks)
 # ---------------------------------------------------------------------------
 # Filas por conjunto que revisa DeepChecks (muestra con SEED); P2 tiene ~2 millones.
