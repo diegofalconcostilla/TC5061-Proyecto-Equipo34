@@ -1,0 +1,140 @@
+{
+  "modelo": "mibici-equipo34-p1-demanda",
+  "A": {
+    "alias": "champion",
+    "version": 1,
+    "run": "p1-hgb-regressor-lags-calendario[learning_rate=0.1]",
+    "run_id": "99aa9c8aed964a3697f7ad6563755cd3"
+  },
+  "B": {
+    "alias": "challenger",
+    "version": 3,
+    "run": "p1-hgb-reentrenado-hasta-2026-06",
+    "run_id": "d47df1d30db8432c973ae32c14de1fe0"
+  },
+  "periodo": [
+    "2026-07-01",
+    "2026-08-31"
+  ],
+  "filas": 27433,
+  "estaciones": 471,
+  "remuestreos": 2000,
+  "semilla": 42,
+  "metricas": {
+    "mae": {
+      "A": 4.87376191457366,
+      "B": 4.820720433812393,
+      "diferencia_B_menos_A": -0.05304148076126758
+    },
+    "rmse": {
+      "A": 8.665040370016504,
+      "B": 8.384336808215867,
+      "diferencia_B_menos_A": -0.28070356180063705
+    },
+    "wape": {
+      "A": 0.18015677673881714,
+      "B": 0.17819611834497356,
+      "diferencia_B_menos_A": -0.001960658393843573
+    },
+    "r2": {
+      "A": 0.9214477005420945,
+      "B": 0.9264546610255027,
+      "diferencia_B_menos_A": 0.005006960483408207
+    }
+  },
+  "bootstrap": {
+    "wape": {
+      "diferencia": -0.0019606583938434952,
+      "ic95_inferior": -0.0035942129135781305,
+      "ic95_superior": -0.00042392519002233296,
+      "prob_B_mejor": 0.9975
+    },
+    "mae": {
+      "diferencia": -0.053041480761265594,
+      "ic95_inferior": -0.09991318862108994,
+      "ic95_superior": -0.010695977891537253,
+      "prob_B_mejor": 0.9975
+    }
+  },
+  "estacion_dias_con_menor_error": {
+    "B_mejor": 0.4986330332081799,
+    "A_mejor": 0.50136696679182,
+    "empate": 0.0
+  },
+  "segmentos": [
+    {
+      "segmento": "Estación",
+      "grupo": "existente",
+      "filas": 23126,
+      "estaciones": 373,
+      "viajes_promedio": 30.374124362189743,
+      "wape_A": 0.17412700836595743,
+      "wape_B": 0.1717363908946394,
+      "mae_A": 5.288955406923645,
+      "mae_B": 5.216342494547408,
+      "cambio_wape_pct": -1.3729159501171329
+    },
+    {
+      "segmento": "Estación",
+      "grupo": "nueva",
+      "filas": 4307,
+      "estaciones": 98,
+      "viajes_promedio": 9.219874622707222,
+      "wape_A": 0.28681762432593827,
+      "wape_B": 0.2924625316512722,
+      "mae_A": 2.644422535867892,
+      "mae_B": 2.6964678736642718,
+      "cambio_wape_pct": 1.968117314478226
+    },
+    {
+      "segmento": "Tipo de día",
+      "grupo": "fin de semana o festivo",
+      "filas": 7981,
+      "estaciones": 471,
+      "viajes_promedio": 20.84488159378524,
+      "wape_A": 0.22539378356886985,
+      "wape_B": 0.22475030080854816,
+      "mae_A": 4.6983067304683495,
+      "mae_B": 4.684893408521802,
+      "cambio_wape_pct": -0.2854926831311995
+    },
+    {
+      "segmento": "Tipo de día",
+      "grupo": "laborable",
+      "filas": 19452,
+      "estaciones": 471,
+      "viajes_promedio": 29.599989718280895,
+      "wape_A": 0.16708619902190136,
+      "wape_B": 0.16474496181236703,
+      "mae_A": 4.945749773114916,
+      "mae_B": 4.876449175784643,
+      "cambio_wape_pct": -1.4012151950547664
+    },
+    {
+      "segmento": "Mes",
+      "grupo": "agosto",
+      "filas": 14179,
+      "estaciones": 471,
+      "viajes_promedio": 26.40214401579801,
+      "wape_A": 0.17339972275748228,
+      "wape_B": 0.1723012875930605,
+      "mae_A": 4.578124452542495,
+      "mae_B": 4.549123409139415,
+      "cambio_wape_pct": -0.6334699657842403
+    },
+    {
+      "segmento": "Mes",
+      "grupo": "julio",
+      "filas": 13254,
+      "estaciones": 440,
+      "viajes_promedio": 27.749056888486496,
+      "wape_A": 0.18703453636054446,
+      "wape_B": 0.18419625228417508,
+      "mae_A": 5.190031989580444,
+      "mae_B": 5.111272283279584,
+      "cambio_wape_pct": -1.5175187062233522
+    }
+  ],
+  "decision": "promover",
+  "decision_texto": "Promover B: su WAPE es menor y el intervalo del 95 % no incluye 0."
+}
