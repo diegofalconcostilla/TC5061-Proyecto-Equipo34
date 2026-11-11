@@ -153,6 +153,11 @@ register:
 predict:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.predict --question $(Q) --alias $(ALIAS)
 
+## A/B de P1: champion contra challenger en julio-agosto de 2026 (reports/monitoreo/p1_ab_test.md)
+.PHONY: abtest
+abtest:
+	$(MLFLOW_RUN) -e abtest
+
 ## Construir la imagen de la API: make api-build [CONTAINER=docker]
 .PHONY: api-build
 api-build:
