@@ -33,6 +33,9 @@ notebook==7.6.3
 ipykernel==7.4.0
 nbconvert==7.17.2
 
+# Monitoreo de drift (mibici/monitoring.py)
+evidently==0.7.23
+
 # Calidad
 deepchecks==0.19.1
 # Dependencias de DeepChecks fijadas: sus versiones nuevas exigen numpy 2 o scikit-learn >= 1.6,
@@ -52,5 +55,8 @@ pip-audit==2.10.1
 pillow==13.0.0
 certifi==2026.10.23
 gitpython==3.2.1
+# pyasn1 y tornado: dependencias indirectas con vulnerabilidades reportadas en noviembre de 2026.
+pyasn1==0.6.5
+tornado==6.6
 
 -e .

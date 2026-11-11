@@ -48,3 +48,12 @@ entry_points:
     command: >-
       python -m mibici.modeling.registry --question {question} --run-name {run_name}
       --alias {alias}
+
+  # Reentrena P1 incluyendo la primera parte del periodo actual, con la familia del champion.
+  # Después se registra con: -e register -P question=p1 -P run_name=<run> -P alias=challenger
+  retrain:
+    parameters:
+      model: {type: string, default: hgb}
+      params: {type: string, default: "learning_rate=0.1"}
+    command: >-
+      python -m mibici.modeling.retrain --model {model} --params {params}
