@@ -37,6 +37,23 @@ def plot_daily_forecast(dates: pd.Series, y_true, y_pred, title: str, path: Path
     return _save(fig, path)
 
 
+def plot_ab_daily_wape(dates, y_true, pred_a, pred_b, labels, title: str, path: Path) -> Path:
+    """P1 A/B: WAPE de todo el sistema por día para las dos versiones sobre las mismas filas."""
+    df = pd.DataFrame({"date": pd.to_datetime(dates), "y": np.asarray(y_true, float)})
+    df["a"] = np.abs(df["y"] - np.asarray(pred_a, float))
+    df["b"] = np.abs(df["y"] - np.asarray(pred_b, float))
+    daily = df.groupby("date")[["y", "a", "b"]].sum()
+    fig, ax = plt.subplots(figsize=(10, 4))
+    for column, label, color in (("a", labels[0], PALETTE[0]), ("b", labels[1], PALETTE[1])):
+        wape = daily[column] / daily["y"]
+        ax.plot(daily.index, wape, color=color, lw=1.4, label=f"{label} (media {wape.mean():.3f})")
+    ax.set_title(title)
+    ax.set_ylabel("WAPE del día")
+    ax.legend()
+    ax.grid(alpha=0.3)
+    return _save(fig, path)
+
+
 def plot_regression_diagnostics(y_true, y_pred, title: str, path: Path) -> Path:
     """P1: real contra predicho y residuales contra predicho, por estación y día."""
     y_true, y_pred = np.asarray(y_true, float), np.asarray(y_pred, float)

@@ -57,3 +57,11 @@ entry_points:
       params: {type: string, default: "learning_rate=0.1"}
     command: >-
       python -m mibici.modeling.retrain --model {model} --params {params}
+
+  # A/B testing de P1: compara dos versiones registradas en el periodo que ninguna vio.
+  abtest:
+    parameters:
+      alias_a: {type: string, default: champion}
+      alias_b: {type: string, default: challenger}
+    command: >-
+      python -m mibici.modeling.abtest --alias-a {alias_a} --alias-b {alias_b}

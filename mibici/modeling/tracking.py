@@ -72,7 +72,8 @@ def common_params(question: str, role: str, granularity: str, horizon: str) -> d
 
 
 # "retrain" no compite en la selección automática de registry.py: su validación usa otro periodo.
-STAGES = ("baseline", "search", "candidate", "retrain")
+# "abtest" compara versiones registradas y no tiene modelo propio.
+STAGES = ("baseline", "search", "candidate", "retrain", "abtest")
 
 
 def start_run(

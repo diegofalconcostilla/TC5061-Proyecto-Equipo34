@@ -202,6 +202,9 @@ MONITORING_REPORTS_DIR = REPORTS_DIR / "monitoreo"
 RETRAIN_VALID_START = "2026-05-01"  # chequeo interno: entrena antes y valida hasta RETRAIN_END
 RETRAIN_END = "2026-06-30"
 AB_EVAL_START = "2026-07-01"
+AB_EVAL_END = MONITORING_CURRENT[1]
+# Remuestreos del bootstrap por estación con el que el A/B calcula el intervalo de la diferencia.
+AB_BOOTSTRAP_SAMPLES = 2000
 
 # ---------------------------------------------------------------------------
 # Validación de datos (DeepChecks)
