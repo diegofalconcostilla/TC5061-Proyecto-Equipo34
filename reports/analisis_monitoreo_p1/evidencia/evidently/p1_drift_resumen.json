@@ -1,0 +1,43 @@
+{
+  "modelo": "models:/mibici-equipo34-p1-demanda@champion",
+  "version": 1,
+  "periodos": {
+    "entrenamiento": [
+      "2024-01-01",
+      "2025-12-31"
+    ],
+    "misma_temporada": [
+      "2025-05-01",
+      "2025-08-31"
+    ],
+    "actual": [
+      "2026-05-01",
+      "2026-08-31"
+    ]
+  },
+  "filas": {
+    "entrenamiento": 262712,
+    "misma_temporada": 45580,
+    "actual": 50561
+  },
+  "columnas_con_drift": {
+    "vs_entrenamiento": {
+      "count": 12.0,
+      "share": 0.6666666666666666
+    },
+    "vs_misma_temporada": {
+      "count": 11.0,
+      "share": 0.6111111111111112
+    }
+  },
+  "calidad_periodo_actual": {
+    "RowCount": 50561.0,
+    "DuplicatedRowCount": 486.0,
+    "EmptyColumnsCount": 0.0,
+    "ConstantColumnsCount": 0.0,
+    "DatasetMissingValueCount": {
+      "count": 0.0,
+      "share": 0.0
+    }
+  }
+}
