@@ -451,7 +451,7 @@ Se realizó una evaluación A/B fuera de muestra (out-of-sample) entre el 01 de 
 
 | Métrica | Modelo A (champion v1) | Modelo B (challenger v3) | Diferencia (B - A) | Resultado 
 |---|---|---|---|---|
-|Wape|0.1812|0.1782|-0.0020|Mejora (menor error)|
+|Wape|0.1802|0.1782|-0.0020|Mejora (menor error)|
 |MAE|4.8738|4.8207|-0.0530|Mejora (menor error)|
 |RMSE|8.6650|8.3843|-0.2807|Mejora (menor error)|
 |R^2|0.9214|0.9265|+0.0050|Mejora (mayor ajuste)|
