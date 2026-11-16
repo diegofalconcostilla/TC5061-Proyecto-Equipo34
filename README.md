@@ -444,6 +444,36 @@ La salida completa de cada chequeo está en [`reports/seguridad/`](reports/segur
 | **Historial de Git** | |
 | ![Revisión del historial](reports/figures/seguridad/secretos_historial.png) | |
 
+## Análisis de A/B Testing y Monitoreo de Data Drift (P1)
+**1. Decisión del Modelo: Champion (v1) vs. Challenger (v3)**
+
+Se realizó una evaluación A/B fuera de muestra (out-of-sample) entre el 01 de julio y el 31 de agosto de 2026 (27,433 registros estación-día en 471 estaciones), comparando el modelo actual en producción (A: champion v1) contra el modelo reentrenado hasta junio de 2026 (B: challenger v3).
+
+| Métrica | Modelo A (champion v1) | Modelo B (challenger v3) | Diferencia (B - A) | Resultado 
+|---|---|---|---|---|
+|Wape|0.1802|0.1782|-0.0020|Mejora (menor error)|
+|MAE|4.8738|4.8207|-0.0530|Mejora (menor error)|
+|RMSE|8.6650|8.3843|-0.2807|Mejora (menor error)|
+|R^2|0.9214|0.9265|+0.0050|Mejora (mayor ajuste)|
+
+- Significancia Estadística: Mediante bootstrap por estación (2,000 remuestreos), el modelo B (challenger v3) demuestra una probabilidad del 99.8% (P(B mejor) = 0.998) de superar al modelo A tanto en WAPE (IC 95%: [-0.0036, -0.0004]) como en MAE (IC 95%: [-0.100, -0.011]). Dado que los intervalos de confianza no incluyen el cero, la mejora es estadísticamente significativa.
+
+- Comportamiento por Segmentos: El modelo B reduce el error de forma consistente en los segmentos de mayor volumen: estaciones existentes (-1.4% en WAPE, 373 estaciones), días laborables (-1.4%), fines de semana/festivos (-0.3%), julio (-1.5%) y agosto (-0.6%). El único incremento marginal de error ocurre en el grupo de 98 estaciones nuevas (+2.0% en WAPE), comportamiento esperado debido a su bajo volumen promedio (9.22 viajes/día) y menor historial acumulado.
+
+- Decisión Final: Se promueve el modelo challenger v3 como el nuevo @champion en producción, ya que reduce consistentemente las métricas globales de error con respaldo estadístico del 99.8%.
+
+**2. Interpretación del Monitoreo y Data Drift**
+
+El monitoreo del periodo actual de producción (mayo a agosto de 2026, 50,561 filas) se contrastó contra dos ventanas de referencia mediante Evidently (distancia de Wasserstein para variables numéricas y Jensen-Shannon para categóricas, con umbral de 0.1):
+
+- Contra el periodo de entrenamiento completo (2024–2025): Se detectó drift en el 66.7% de las variables (12 de 18 columnas).
+- Contra la misma temporada del año anterior (mayo–agosto 2025): Se detectó drift en el 61.1% de las variables (11 de 18 columnas). Al comparar exactamente los mismos meses del año, se descarta que la desviación sea un efecto puramente estacional, confirmando un cambio estructural en la distribución de los datos.
+
+**Causas Operativas y Calidad de Datos**
+- Expansión de la red MiBici (Causa principal del drift): Entre el verano de 2025 y el de 2026, el sistema pasó de 371 a 471 estaciones activas (+100 estaciones nuevas). Estas 100 estaciones nuevas promedian apenas 9.5 salidas/día, mientras que las estaciones existentes promedian 29.2 salidas/día (ligeramente por debajo de las 31.9 registradas en 2025). Esta nueva composición desplaza hacia abajo las distribuciones de los lags y promedios móviles de demanda.
+- Integridad de los datos: El conjunto actual presenta 0% de valores faltantes y cero columnas vacías o constantes. Las 486 filas señaladas en DuplicatedRowCount no representan registros duplicados en el dataset original, sino combinaciones numéricas idénticas al excluir station_id y date del análisis de monitoreo.
+- Acción Recomendada: El drift detectado justifica plenamente la promoción del modelo reentrenado (v3), ya que incorpora la dinámica de las 100 estaciones nuevas. Se recomienda mantener el monitoreo periódico y programar un nuevo reentrenamiento una vez que las estaciones recientes consoliden mayor historial de uso.
+
 ## Buenas prácticas aplicadas
 
 | Práctica | Cómo se aplica |

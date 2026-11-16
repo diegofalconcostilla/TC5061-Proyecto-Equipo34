@@ -57,6 +57,6 @@ certifi==2026.10.23
 gitpython==3.2.1
 # pyasn1 y tornado: dependencias indirectas con vulnerabilidades reportadas en noviembre de 2026.
 pyasn1==0.6.5
-tornado==6.6
+tornado==6.6.1  # 6.6.1 corrige CVE-2026-126347
 
 -e .
