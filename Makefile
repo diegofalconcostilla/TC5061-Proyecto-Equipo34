@@ -15,6 +15,8 @@ ALIAS ?= champion
 # Motor de contenedores de la API: podman o docker (mismo Containerfile, estándar OCI).
 CONTAINER ?= podman
 API_IMAGE ?= mibici-api:1.2
+# Orquestador del sistema completo (docker-compose.yml): docker compose, podman compose o podman-compose.
+COMPOSE ?= $(CONTAINER) compose
 # Nombre de la máquina anfitriona dentro del contenedor, donde corre el servidor de MLflow.
 CONTAINER_HOST = $(if $(filter docker,$(CONTAINER)),host.docker.internal,host.containers.internal)
 MLFLOW_ALLOWED_HOSTS = localhost,localhost:$(MLFLOW_PORT),127.0.0.1,127.0.0.1:$(MLFLOW_PORT),host.containers.internal,host.containers.internal:$(MLFLOW_PORT),host.docker.internal,host.docker.internal:$(MLFLOW_PORT)
@@ -168,6 +170,22 @@ api-build:
 api-run:
 	$(CONTAINER) run --rm --name mibici-api -p 8000:8000 \
 		-e MLFLOW_TRACKING_URI=http://$(CONTAINER_HOST):$(MLFLOW_PORT) $(API_IMAGE)
+
+## Levantar MLflow + API con Compose (docker-compose.yml): make compose-up [CONTAINER=docker]
+.PHONY: compose-up
+compose-up:
+	$(COMPOSE) up -d --build --wait
+
+## Detener los servicios de Compose (el registry en mlflow.db y mlartifacts/ se conserva)
+.PHONY: compose-down
+compose-down:
+	$(COMPOSE) down
+
+## Estado y últimos logs de los servicios de Compose
+.PHONY: compose-logs
+compose-logs:
+	$(COMPOSE) ps
+	$(COMPOSE) logs --tail=50
 
 ## Todos los experimentos y el registro de champions (scripts/run_experiments.sh)
 .PHONY: experiments
