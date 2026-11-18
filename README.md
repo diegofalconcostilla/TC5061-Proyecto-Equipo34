@@ -34,11 +34,12 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ## Estructura del repositorio
 
 ```
-├── .github/workflows/ci.yml  <- CI: lint, pruebas y chequeos de seguridad en cada Pull Request
+├── .github/workflows/ci.yml  <- CI/CD: lint, pruebas, seguridad, imagen, prueba del sistema con Compose y publicación en GHCR
+├── docker-compose.yml     <- sistema completo (MLflow + API) con un solo comando
 ├── .env.example           <- variables de entorno configurables (copiar a .env, que no se versiona)
 ├── MLproject              <- MLflow Project: ingest, train, search y register
 ├── python_env.yaml        <- entorno del MLflow Project (Python 3.12 + requirements.txt)
-├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate | security | api-build | api-run
+├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate | security | api-build | api-run | compose-up | compose-down
 ├── Containerfile          <- imagen OCI de la API (podman build o docker build)
 ├── README.md
 ├── requirements.txt       <- dependencias con versión fija
@@ -64,7 +65,8 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   ├── deepchecks/        <- reportes HTML de make validate (no versionado)
 │   └── figures/           <- capturas de MLflow, DeepChecks, pruebas, seguridad y la API
 ├── scripts
-│   └── run_experiments.sh <- todos los runs de la entrega y el registro de champions
+│   ├── run_experiments.sh <- todos los runs de la entrega y el registro de champions
+│   └── compose_smoke_model.py <- modelo de humo de P1 para la prueba del sistema en CI
 ├── tests/                 <- pruebas de ingesta, features, modelado, métricas, reproducibilidad y validación
 └── mibici                 <- módulo del proyecto
     ├── config.py          <- rutas, fechas, cortes, semilla y parámetros en un solo lugar
@@ -240,6 +242,31 @@ Los modelos son pequeños (≈3 MB) y responden en milisegundos, así que un sol
 
 Para correr la API fuera del contenedor sin servidor de MLflow, `python -m mibici.api.registry --alias champion` copia los champions a `models/api/` y la API los carga desde ahí (`"source": "packaged"`). Es solo para desarrollo local.
 
+### Sistema completo con Docker Compose
+
+`docker-compose.yml` levanta el servidor de MLflow y la API juntos, con un solo comando, en una red propia (`mibici-net`):
+
+| Servicio | Puerto | Qué hace |
+|---|---|---|
+| `mlflow` | 5001 | Tracking y Model Registry. Usa el `mlflow.db` y la carpeta `mlartifacts/` del repositorio (montados como volumen, igual que `make mlflow-server`) y sirve los artefactos por HTTP. |
+| `api` | 8000 | API REST. Carga los champions del servicio `mlflow` por la red interna (`MLFLOW_TRACKING_URI=http://mlflow:5001`); arranca cuando `mlflow` está `healthy`. |
+
+Los dos servicios usan la misma imagen (`Containerfile`), así el servidor y la API tienen exactamente la versión de MLflow con que se registraron los modelos. Ambos tienen healthcheck y `restart: unless-stopped`, y la API tiene límites de CPU y memoria.
+
+```bash
+cp .env.example .env              # opcional: puertos, workers y límites de la API
+docker compose up -d --build --wait   # o: make compose-up CONTAINER=docker
+docker compose ps                 # mibici-mlflow y mibici-api en estado healthy
+# Si el registry está vacío, registrar los champions contra el servicio de Compose:
+make all                          # usa MLFLOW_TRACKING_URI=http://127.0.0.1:5001
+curl -X POST http://localhost:8000/predict/p1 -H "Content-Type: application/json" -d @examples/api/p1.json
+docker compose down               # o: make compose-down (el registry se conserva)
+```
+
+Con Podman: `podman compose up -d --build` o `podman-compose up -d --build` (`make compose-up` usa `podman compose` por defecto). En Linux el servidor de MLflow debe poder escribir en el repositorio: `MLFLOW_UID=$(id -u) MLFLOW_GID=$(id -g) docker compose up -d`. Un `mlflow.db` creado con un servidor sin `--artifacts-destination` guarda rutas `file:///` de otra máquina y la API responde 503: en ese caso hay que empezar con un registry nuevo (ver [Reproducir el experimento](#reproducir-el-experimento)).
+
+Variables de `.env` que lee Compose: `MLFLOW_PORT`, `API_PORT`, `API_WORKERS` (workers de uvicorn), `API_CPUS`, `API_MEMORY`, `MLFLOW_UID` y `MLFLOW_GID`.
+
 ### Construir y levantar el contenedor
 
 Requisitos: Podman (en macOS y Windows, primero `podman machine init` y `podman machine start`) o Docker, y el servidor de MLflow con los champions registrados (`make mlflow-server` y `make all`, ver [Reproducir el experimento](#reproducir-el-experimento)).
@@ -364,7 +391,17 @@ python -m pytest tests -v    # con el nombre de cada prueba
 
 **Reproducibilidad.** Las pruebas llaman a las funciones de entrenamiento del proyecto (`p1_hgb`, `p2_random_forest`, `p3_minibatch_kmeans`, etc.), no solo a scikit-learn, con tablas sintéticas que tienen las mismas columnas que los datasets reales. Todos los modelos usan `random_state=SEED` (`SEED = 42` en `config.py`). Los random forest entrenan árboles idénticos, pero con `n_jobs=-1` suman las predicciones de los árboles en paralelo y el orden de la suma cambia los últimos bits (diferencias de 1e-15), así que las predicciones se comparan con una tolerancia de 1e-12 y no bit a bit.
 
-GitHub Actions corre `make lint`, `make test` y `make security` en cada Pull Request y en cada push a `main` (`.github/workflows/ci.yml`).
+### CI/CD con GitHub Actions
+
+`.github/workflows/ci.yml` corre en cada Pull Request y en cada push a `main`. Una corrida nueva en la misma rama cancela la anterior.
+
+1. **Lint, pruebas y seguridad** (`checks`): `make lint`, `make test` y `make security`, con caché de pip.
+2. **Imagen y sistema con Compose** (`image`, solo si `checks` pasa):
+   - construye la imagen desde `Containerfile` con Buildx y caché de capas de GitHub Actions;
+   - valida `docker-compose.yml` y levanta el sistema con `docker compose up --wait`;
+   - prueba de punta a punta: `/health` de MLflow y de la API, 503 con el registry vacío, registro de un modelo de humo de P1 (`scripts/compose_smoke_model.py`) que la API descarga del servicio `mlflow` y con el que responde 200 con `"source": "registry"`, y 422 con una petición inválida;
+   - muestra los logs de los servicios si algo falla;
+   - solo en `main`, publica la imagen probada en GitHub Container Registry (`ghcr.io/diegofalconcostilla/mibici-api:<sha>` y `:latest`).
 
 ![Ejecución de las pruebas](reports/figures/pruebas/pytest.png)
 
