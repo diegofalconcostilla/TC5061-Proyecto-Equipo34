@@ -73,7 +73,7 @@ PIP_AUDIT_IGNORE = --ignore-vuln PYSEC-2026-3447 --ignore-vuln GHSA-xmj3-9gf7-h5
 .PHONY: security
 security:
 	bandit -r mibici
-	pip-audit --skip-editable $(PIP_AUDIT_IGNORE)
+	pip-audit --skip-editable --timeout 60 $(PIP_AUDIT_IGNORE)
 
 
 ## Set up Python interpreter environment
