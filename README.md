@@ -180,11 +180,11 @@ Versiones en producción (corrida oficial; justificación en [`docs/TC5061_Repor
 
 | Modelo registrado | `@champion` | `@challenger` |
 |---|---|---|
-| `mibici-equipo34-p1-demanda` | v1 · `p1-hgb-regressor-lags-calendario[learning_rate=0.1]` | v2 · `p1-random-forest-lags-calendario` |
+| `mibici-equipo34-p1-demanda` | v1 · `p1-hgb-regressor-lags-calendario[learning_rate=0.1]` | v3 · `p1-hgb-reentrenado-hasta-2026-06` (hasta la entrega 8: v2 · `p1-random-forest-lags-calendario`) |
 | `mibici-equipo34-p2-riesgo` | v1 · `p2-hgb-classifier-flujos-lag[learning_rate=0.1]` | v2 · `p2-random-forest-flujos-lag` |
 | `mibici-equipo34-p3-grupos` | v1 · `p3-kmeans-perfiles-uso` (k = 3) | v2 · `p3-birch-perfiles-uso` |
 
-En P1 y P2 el champion es la mejor candidata por la métrica de validación y el challenger, la mejor de otra familia. En P3 la mejor silueta es de la mezcla gaussiana, pero su asignación es inestable entre periodos (ARI 0.30 con covarianza diagonal y 0.01 con completa), así que `scripts/run_experiments.sh` fija el champion en KMeans k = 3 (ARI 0.45) y el challenger en Birch (ARI 0.53).
+En P1 y P2 el champion es la mejor candidata por la métrica de validación y el challenger, la mejor de otra familia. En P1, el monitoreo de drift llevó a reentrenar el champion con datos hasta junio de 2026 (`mlflow run . -e retrain`); esa versión, v3, reemplazó al random forest como `@challenger` y es la que compara el [A/B testing](#análisis-de-ab-testing-y-monitoreo-de-data-drift-p1). En P3 la mejor silueta es de la mezcla gaussiana, pero su asignación es inestable entre periodos (ARI 0.30 con covarianza diagonal y 0.01 con completa), así que `scripts/run_experiments.sh` fija el champion en KMeans k = 3 (ARI 0.45) y el challenger en Birch (ARI 0.53).
 
 ### Cómo agregar un modelo
 
@@ -206,7 +206,7 @@ Experimento `mibici-equipo34`, corrida oficial (64 runs con el mismo commit y `g
 | P1 | `p1-baseline-historico-estacion-dia-semana` (baseline) | wape 0.242 | mae 8.11 · wape 0.298 |
 | P1 | `p1-poisson-lineal-lags-calendario[alpha=0.1]` (mejor lineal) | wape 0.197 | mae 5.97 · wape 0.219 |
 | P1 | `p1-ridge-lags-calendario` | wape 0.214 | mae 6.36 · wape 0.233 |
-| P1 | `p1-random-forest-lags-calendario` (challenger) | wape 0.180 | mae 5.40 · wape 0.198 |
+| P1 | `p1-random-forest-lags-calendario` (challenger hasta la entrega 8) | wape 0.180 | mae 5.40 · wape 0.198 |
 | P1 | `p1-hgb-regressor-lags-calendario[loss=squared_error]` | wape 0.179 | mae 5.41 · wape 0.198 |
 | P1 | **`p1-hgb-regressor-lags-calendario[learning_rate=0.1]` (champion)** | **wape 0.176** | **mae 5.33 · wape 0.196** |
 | P2 | `p2-baseline-persistencia-semanal` (baseline) | pr_auc 0.397 | pr_auc 0.388 · f1 0.350 |
@@ -574,7 +574,7 @@ Se realizó una evaluación A/B fuera de muestra (out-of-sample) entre el 01 de 
 
 - Comportamiento por Segmentos: El modelo B reduce el error de forma consistente en los segmentos de mayor volumen: estaciones existentes (-1.4% en WAPE, 373 estaciones), días laborables (-1.4%), fines de semana/festivos (-0.3%), julio (-1.5%) y agosto (-0.6%). El único incremento marginal de error ocurre en el grupo de 98 estaciones nuevas (+2.0% en WAPE), comportamiento esperado debido a su bajo volumen promedio (9.22 viajes/día) y menor historial acumulado.
 
-- Decisión Final: Se promueve el modelo challenger v3 como el nuevo @champion en producción, ya que reduce consistentemente las métricas globales de error con respaldo estadístico del 99.8%.
+- Decisión Final: El A/B recomienda promover el challenger v3 a @champion, ya que reduce consistentemente las métricas globales de error con respaldo estadístico del 99.8%. La promoción no es automática: `make abtest` solo registra la decisión (run `abtest` y etiquetas en ambas versiones), y mover el alias requiere `python -m mibici.modeling.abtest --promote`. Mientras no se ejecute, v1 sigue como @champion y v3 como @challenger, y la API puede servir v3 con `?alias=challenger`. Para promoverlo basta mover el alias y reiniciar la API, sin reconstruir la imagen.
 
 **2. Interpretación del Monitoreo y Data Drift**
 
