@@ -72,7 +72,7 @@ validate:
 PIP_AUDIT_IGNORE = --ignore-vuln PYSEC-2026-3447 --ignore-vuln GHSA-xmj3-9gf7-h52w
 .PHONY: security
 security:
-	bandit -r mibici
+	bandit -r mibici load
 	pip-audit --skip-editable --vulnerability-service osv --timeout 60 $(PIP_AUDIT_IGNORE)
 
 
@@ -186,6 +186,29 @@ compose-down:
 compose-logs:
 	$(COMPOSE) ps
 	$(COMPOSE) logs --tail=50
+
+## Prueba de carga con Locust (requiere make compose-up): make load-test [ESCENARIO=base|nominal|estres]
+# Resultados en reports/carga/<escenario>[_<sufijo>]/: CSV y HTML de Locust y recursos.csv.
+# Otra configuración de la API sin pisar la base: API_WORKERS=2 make compose-up y luego
+# make load-test ESCENARIO=estres SUFIJO=2workers LOAD_MAX_USERS=300
+ESCENARIO ?= base
+LOAD_ARGS_base = --users 20 --spawn-rate 5 --run-time 2m
+LOAD_ARGS_nominal = --users 80 --spawn-rate 10 --run-time 3m
+LOAD_SHAPE_estres = ,load/escalones.py
+LOAD_ARGS ?= $(LOAD_ARGS_$(ESCENARIO))
+export LOAD_MAX_USERS ?= 200
+LOAD_DIR = reports/carga/$(ESCENARIO)$(if $(SUFIJO),_$(SUFIJO))
+.PHONY: load-test
+load-test:
+	mkdir -p $(LOAD_DIR)
+	locust -f load/locustfile.py$(LOAD_SHAPE_$(ESCENARIO)) --headless $(LOAD_ARGS) --only-summary \
+		--csv $(LOAD_DIR)/locust --html $(LOAD_DIR)/locust.html \
+		--recursos-csv $(LOAD_DIR)/recursos.csv --motor $(CONTAINER)
+
+## Gráficas y resumen de las pruebas de carga (reports/carga/resultados.md, reports/figures/carga/)
+.PHONY: load-report
+load-report:
+	$(PYTHON_INTERPRETER) load/report.py
 
 ## Todos los experimentos y el registro de champions (scripts/run_experiments.sh)
 .PHONY: experiments

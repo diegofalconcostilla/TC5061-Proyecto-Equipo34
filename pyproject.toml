@@ -21,7 +21,7 @@ requires-python = "~=3.12.0"
 [tool.ruff]
 line-length = 99
 src = ["mibici"]
-include = ["pyproject.toml", "mibici/**/*.py"]
+include = ["pyproject.toml", "mibici/**/*.py", "load/**/*.py"]
 
 [tool.ruff.lint]
 extend-select = ["I"]  # Add import sorting
