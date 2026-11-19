@@ -39,7 +39,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ├── .env.example           <- variables de entorno configurables (copiar a .env, que no se versiona)
 ├── MLproject              <- MLflow Project: ingest, train, search y register
 ├── python_env.yaml        <- entorno del MLflow Project (Python 3.12 + requirements.txt)
-├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate | security | api-build | api-run | compose-up | compose-down
+├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate | security | api-build | api-run | compose-up | compose-down | load-test | load-report
 ├── Containerfile          <- imagen OCI de la API (podman build o docker build)
 ├── README.md
 ├── requirements.txt       <- dependencias con versión fija
@@ -52,6 +52,11 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   └── processed/         <- datasets de P1, P2 y P3 (no versionado)
 ├── docs/                  <- propuesta (entrega 1) y reporte de MLflow (entrega 2) en PDF
 ├── examples/api/          <- peticiones de ejemplo para la API (registros reales de test)
+├── load
+│   ├── locustfile.py      <- escenario de tráfico de Locust (P1, P2, P3, tablero y petición inválida)
+│   ├── escalones.py       <- forma de carga por escalones para la prueba de estrés
+│   ├── docker_stats.py    <- CPU y memoria de los contenedores durante la carga
+│   └── report.py          <- gráficas y resumen de las pruebas de carga (make load-report)
 ├── models/                <- copias locales opcionales de modelos (no versionado; la imagen no las incluye)
 ├── notebooks
 │   └── 1.0-dfc-exploracion-mibici.ipynb   <- exploración (solo análisis)
@@ -61,6 +66,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ├── reports
 │   ├── entrega3-propuestas-oscar.md        <- entrega 3: qué se hizo y qué falta
 │   ├── validacion_datos.md                 <- hallazgos de DeepChecks por pregunta
+│   ├── carga/             <- resultados de Locust y docker stats por escenario, y resultados.md
 │   ├── seguridad/         <- salida de bandit, pip-audit y la revisión del historial
 │   ├── deepchecks/        <- reportes HTML de make validate (no versionado)
 │   └── figures/           <- capturas de MLflow, DeepChecks, pruebas, seguridad y la API
@@ -388,6 +394,7 @@ python -m pytest tests -v    # con el nombre de cada prueba
 | `test_api.py` | Endpoints REST, esquemas de P1, P2 y P3, validación de entradas y salidas, carga desde el registry por alias o desde una copia local | Variables faltantes, de más o fuera de rango; perfil de P3 que no suma 1; salida inválida del modelo; registros vacíos; MLflow no disponible |
 | `test_reproducibility.py` | **Reproducibilidad:** entrenar dos veces con `SEED` da las mismas predicciones | HGB y random forest de P1 y P2, MiniBatchKMeans y mezcla de gaussianas de P3; control: con otros datos el modelo sí cambia |
 | `test_validation.py` | Las suites de DeepChecks detectan nulos, duplicados, columnas constantes y drift | Columna constante conocida (excepción declarada) contra una nueva |
+| `test_load_report.py` | Lectura de `docker stats`/`podman stats`, resumen de los CSV de Locust, escalones del estrés y capacidad con el SLO | Unidades de memoria de Docker (MiB) y Podman (MB); segundos de transición entre escalones y fila final de Locust; ningún escalón dentro del SLO |
 
 **Reproducibilidad.** Las pruebas llaman a las funciones de entrenamiento del proyecto (`p1_hgb`, `p2_random_forest`, `p3_minibatch_kmeans`, etc.), no solo a scikit-learn, con tablas sintéticas que tienen las mismas columnas que los datasets reales. Todos los modelos usan `random_state=SEED` (`SEED = 42` en `config.py`). Los random forest entrenan árboles idénticos, pero con `n_jobs=-1` suman las predicciones de los árboles en paralelo y el orden de la suma cambia los últimos bits (diferencias de 1e-15), así que las predicciones se comparan con una tolerancia de 1e-12 y no bit a bit.
 
@@ -404,6 +411,70 @@ python -m pytest tests -v    # con el nombre de cada prueba
    - solo en `main`, publica la imagen probada en GitHub Container Registry (`ghcr.io/diegofalconcostilla/mibici-api:<sha>` y `:latest`).
 
 ![Ejecución de las pruebas](reports/figures/pruebas/pytest.png)
+
+## Pruebas de carga con Locust
+
+[Locust](https://locust.io/) simula usuarios concurrentes contra la API levantada con Compose y mide peticiones por segundo (RPS), latencia y errores; al mismo tiempo, `load/docker_stats.py` registra CPU y memoria de los contenedores con `docker stats` (o `podman stats`). Los resultados son el insumo del análisis de costo por inferencia.
+
+```bash
+make compose-up CONTAINER=docker                      # MLflow + API con los champions del registry
+make load-test CONTAINER=docker ESCENARIO=base        # 20 usuarios, 2 min
+make load-test CONTAINER=docker ESCENARIO=nominal     # 80 usuarios, 3 min
+make load-test CONTAINER=docker ESCENARIO=estres      # escalones de 20 usuarios cada 30 s hasta 200
+make load-report                                      # gráficas y reports/carga/resultados.md
+```
+
+Cada corrida deja en `reports/carga/<escenario>/` el reporte HTML de Locust (`locust.html`), los CSV de estadísticas (`locust_stats.csv`, y `locust_stats_history.csv` con una fila por segundo) y `recursos.csv` (CPU y memoria cada ~2 s). Para explorar en vivo: `locust -f load/locustfile.py` y abrir <http://localhost:8089>.
+
+**Escenario de tráfico** (`load/locustfile.py`). Cada usuario espera entre 0.5 y 2 s entre peticiones y elige una tarea según la [estrategia de despliegue](#estrategia-de-despliegue):
+
+| Tarea | Peso | Petición |
+|---|---:|---|
+| Riesgo de desbalance (P2) | 6 | `examples/api/p2.json`: la consulta en tiempo real del equipo de rebalanceo |
+| Demanda del día siguiente (P1) | 2 | `examples/api/p1.json` (2 estaciones) |
+| Grupo de la estación (P3) | 1 | `examples/api/p3.json` |
+| Tablero de P1 | 1 | 480 estaciones en una sola petición |
+| Petición inválida | 1 | `examples/api/p1_invalido.json`: cuenta como éxito si la API responde 422 |
+
+Una respuesta 200 solo cuenta como éxito si trae una predicción por registro y el modelo viene del registry. Antes de medir, el locustfile hace peticiones de calentamiento: la primera predicción descarga el modelo de MLflow (~0.4-0.9 s) y, sin calentar, ese arranque en frío inflaba el p95 de P2 de 45 ms a 1.1 s en una corrida de 30 s.
+
+**Resultados.** Docker Desktop en un MacBook Pro M3 Max (4 vCPU y 16 GB asignados a Docker); Locust corre en la misma máquina. Contenedor de la API con los límites del Compose: 2 vCPU y 2 GB. Detalle por escalón en [`reports/carga/resultados.md`](reports/carga/resultados.md).
+
+| Escenario | Workers | Peticiones | Errores | RPS | p50 (ms) | p95 (ms) | p99 (ms) | CPU API máx. | Memoria API máx. |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| base | 1 | 1,868 | 0 % | 15.6 | 25 | 54 | 80 | 48 % | 239 MiB |
+| nominal | 1 | 10,804 | 0 % | 60.2 | 35 | 150 | 250 | 137 % | 242 MiB |
+| nominal | 2 | 10,757 | 0 % | 60.0 | 23 | 53 | 90 | 114 % | 444 MiB |
+
+CPU en porcentaje de un vCPU (100 % = un núcleo).
+
+![RPS, latencia y errores por escenario](reports/figures/carga/carga_series.png)
+
+**Capacidad.** En la prueba de estrés el RPS crece con los usuarios hasta que la API se satura; a partir de ahí el RPS se queda plano y las peticiones esperan en cola, así que la latencia sube. Tomamos como capacidad el escalón con más RPS cuyo p95 no pasa de 300 ms:
+
+| Workers de uvicorn | Capacidad | p95 en ese punto | CPU API | Memoria API |
+|---:|---:|---:|---:|---:|
+| 1 | 71 RPS (100 usuarios) | 220 ms | 133 % | 231 MiB |
+| 2 | 112 RPS (160 usuarios) | 210 ms | 193 % | 472 MiB |
+
+![Curva de saturación con 1 worker](reports/figures/carga/carga_saturacion.png)
+
+- **El cuello de botella es la CPU de un solo proceso.** Con 1 worker la CPU se queda en ~160 % de los 200 % permitidos: Python ejecuta el código de la API en un solo hilo a la vez, y solo numpy y scikit-learn usan algo más de un núcleo. Con `API_WORKERS=2` (dos procesos) la CPU llega al 200 % del límite y la capacidad sube 57 % con los mismos recursos; con la misma carga nominal, el p95 baja de 150 a 53 ms.
+- **La memoria sobra.** Cada worker carga su propia copia de los tres modelos (~240 MiB por worker); con 2 workers se usan ~500 MiB de los 2 GB del límite.
+- **Sin errores.** 0 fallas en las 84,089 peticiones de las cinco corridas, incluso con la API saturada: la saturación se ve como latencia, no como errores.
+- **Límites de la medición.** Locust y los contenedores comparten la máquina, y la API corre con un solo contenedor en Docker Desktop. Los números sirven para comparar configuraciones y dimensionar, no como capacidad de producción.
+
+![1 contra 2 workers con el mismo límite de CPU](reports/figures/carga/carga_workers.png)
+
+Para repetir la comparación de workers sin pisar los resultados de 1 worker:
+
+```bash
+API_WORKERS=2 docker compose up -d --wait api
+make load-test CONTAINER=docker ESCENARIO=nominal SUFIJO=2workers
+make load-test CONTAINER=docker ESCENARIO=estres SUFIJO=2workers LOAD_MAX_USERS=300
+make load-report
+docker compose up -d --wait api                       # de vuelta a API_WORKERS del .env (1)
+```
 
 ## Validación de datos
 
@@ -461,7 +532,7 @@ La salida completa de cada chequeo está en [`reports/seguridad/`](reports/segur
 - La ingesta elimina las columnas personales de los viajes (usuario, género y año de nacimiento) antes de guardar nada. `test_clean_trips_drops_personal_data_and_invalid_rows` lo comprueba.
 - Revisamos todo el historial de Git: ninguna línea agregada contiene `password`, `secret`, `token` o `api_key` con un valor asignado, y no hay archivos `.env`, `.pem`, `.key` ni de credenciales versionados.
 
-**bandit (análisis del código).** Reportó 3 avisos de severidad baja, todos en `git_info()` de `tracking.py`, que llama a `git` para registrar el commit en cada run: B404 (importar `subprocess`), B603 (llamar un proceso) y B607 (ruta parcial del ejecutable). Son falsos positivos: los argumentos están fijos en el código, no vienen del usuario y no se usa shell. `git` se busca en el `PATH` a propósito porque su ruta cambia entre sistemas operativos. Se marcaron con `# nosec` y la explicación en el código; ahora bandit no reporta ningún problema.
+**bandit (análisis del código).** Reportó 3 avisos de severidad baja, todos en `git_info()` de `tracking.py`, que llama a `git` para registrar el commit en cada run: B404 (importar `subprocess`), B603 (llamar un proceso) y B607 (ruta parcial del ejecutable). Son falsos positivos: los argumentos están fijos en el código, no vienen del usuario y no se usa shell. `git` se busca en el `PATH` a propósito porque su ruta cambia entre sistemas operativos. Se marcaron con `# nosec` y la explicación en el código; ahora bandit no reporta ningún problema. `make security` también revisa `load/`: `docker_stats.py` llama a `docker stats` o `podman stats` con el mismo patrón (argumentos fijos, sin shell) y lleva la misma marca.
 
 **pip-audit (dependencias).** Se audita el entorno instalado y no solo `requirements.txt`, para incluir también las dependencias indirectas. La primera corrida reportó 45 avisos de vulnerabilidad en 5 paquetes:
 
