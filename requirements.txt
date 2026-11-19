@@ -36,6 +36,9 @@ nbconvert==7.17.2
 # Monitoreo de drift (mibici/monitoring.py)
 evidently==0.7.23
 
+# Pruebas de carga de la API (load/locustfile.py)
+locust==2.47.0
+
 # Calidad
 deepchecks==0.19.1
 # Dependencias de DeepChecks fijadas: sus versiones nuevas exigen numpy 2 o scikit-learn >= 1.6,
