@@ -1,0 +1,110 @@
+# Sistema completo de MiBici con un solo comando (Docker Compose o podman-compose):
+#
+#   docker compose up -d --build        # o: make compose-up
+#   docker compose ps                   # ambos servicios en estado healthy
+#   docker compose down                 # o: make compose-down
+#
+# Servicios:
+#   mlflow  servidor de MLflow Tracking y Model Registry en http://localhost:5001. Usa el mismo
+#           mlflow.db y la misma carpeta mlartifacts/ del repositorio que make mlflow-server, y
+#           sirve los artefactos por HTTP (mlflow-artifacts:/) para que la API los descargue.
+#   api     API REST de FastAPI en http://localhost:8000 (Swagger en /docs). Carga los champions
+#           del registry del servicio mlflow por la red interna (http://mlflow:5001).
+#
+# Las dos imágenes son la misma (Containerfile): así el servidor y la API usan exactamente la
+# versión de MLflow con que se registraron los modelos (requirements-api.txt).
+# Los puertos y el usuario del servidor se ajustan en .env (ver .env.example).
+
+name: mibici
+
+x-image: &image
+  image: ${API_IMAGE:-mibici-api:1.2}
+
+services:
+  mlflow:
+    <<: *image
+    build:
+      context: .
+      dockerfile: Containerfile
+    container_name: mibici-mlflow
+    # El registry vive en el repositorio (mlflow.db y mlartifacts/, fuera de git), como con
+    # make mlflow-server; el usuario debe poder escribir ahí (en Linux: MLFLOW_UID=$(id -u)).
+    user: "${MLFLOW_UID:-10001}:${MLFLOW_GID:-10001}"
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+      # La imagen apunta a host.containers.internal (para la API); aquí el servidor es él mismo.
+      MLFLOW_TRACKING_URI: http://127.0.0.1:5001
+      HOME: /tmp
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5001
+      - --backend-store-uri=sqlite:///mlflow.db
+      - --artifacts-destination=./mlartifacts
+      - --workers=2
+      # mlflow:5001 es el nombre del servicio en la red de Compose (lo usa la API).
+      - --allowed-hosts=mlflow,mlflow:5001,localhost,localhost:5001,127.0.0.1,127.0.0.1:5001,localhost:${MLFLOW_PORT:-5001},127.0.0.1:${MLFLOW_PORT:-5001}
+    ports:
+      - "${MLFLOW_PORT:-5001}:5001"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/health', timeout=4)",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+    networks:
+      - mibici
+    restart: unless-stopped
+
+  api:
+    <<: *image
+    build:
+      context: .
+      dockerfile: Containerfile
+    container_name: mibici-api
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5001
+      # Workers de uvicorn: cada uno carga sus propios modelos (más memoria, más throughput).
+      WEB_CONCURRENCY: ${API_WORKERS:-1}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    # El HEALTHCHECK del Containerfile revisa /health cada 30s; aquí más seguido para que
+    # docker compose up --wait termine pronto.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+    deploy:
+      resources:
+        limits:
+          cpus: "${API_CPUS:-2}"
+          memory: ${API_MEMORY:-2g}
+    networks:
+      - mibici
+    restart: unless-stopped
+
+networks:
+  mibici:
+    name: mibici-net
+    driver: bridge
