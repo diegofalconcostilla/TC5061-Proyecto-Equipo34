@@ -4,7 +4,7 @@
     <img src="https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter" />
 </a>
 
-Propuesta de solución de Machine Learning para la operación de **MiBici**, el sistema de bicicleta pública del Área Metropolitana de Guadalajara. El repositorio tiene la ingesta reproducible y versionada de los viajes, el módulo de feature engineering, un MLflow Project que reproduce los experimentos de las tres preguntas y el Model Registry con el modelo `champion` de cada una. Es la base para las siguientes entregas del proyecto integrador de TC5061.
+Propuesta de solución de Machine Learning para la operación de **MiBici**, el sistema de bicicleta pública del Área Metropolitana de Guadalajara. El repositorio tiene la ingesta reproducible y versionada de los viajes, el módulo de feature engineering, un MLflow Project que reproduce los experimentos de las tres preguntas, el Model Registry con el modelo `champion` de cada una y su operación: una API REST en contenedor, el sistema completo con Docker Compose, CI/CD con GitHub Actions, monitoreo de drift con A/B testing y pruebas de carga con Locust. Es el proyecto integrador de TC5061.
 
 ## Preguntas del proyecto
 
@@ -37,9 +37,9 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ├── .github/workflows/ci.yml  <- CI/CD: lint, pruebas, seguridad, imagen, prueba del sistema con Compose y publicación en GHCR
 ├── docker-compose.yml     <- sistema completo (MLflow + API) con un solo comando
 ├── .env.example           <- variables de entorno configurables (copiar a .env, que no se versiona)
-├── MLproject              <- MLflow Project: ingest, train, search y register
+├── MLproject              <- MLflow Project: ingest, train, search, register, retrain y abtest
 ├── python_env.yaml        <- entorno del MLflow Project (Python 3.12 + requirements.txt)
-├── Makefile               <- make mlflow-server | ingest | train | search | register | all | test | validate | security | api-build | api-run | compose-up | compose-down
+├── Makefile               <- make mlflow-server | ingest | train | search | register | all | abtest | test | validate | security | api-build | api-run | compose-up | compose-down | load-test | load-report
 ├── Containerfile          <- imagen OCI de la API (podman build o docker build)
 ├── README.md
 ├── requirements.txt       <- dependencias con versión fija
@@ -52,6 +52,11 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   └── processed/         <- datasets de P1, P2 y P3 (no versionado)
 ├── docs/                  <- propuesta (entrega 1) y reporte de MLflow (entrega 2) en PDF
 ├── examples/api/          <- peticiones de ejemplo para la API (registros reales de test)
+├── load
+│   ├── locustfile.py      <- escenario de tráfico de Locust (P1, P2, P3, tablero y petición inválida)
+│   ├── escalones.py       <- forma de carga por escalones para la prueba de estrés
+│   ├── docker_stats.py    <- CPU y memoria de los contenedores durante la carga
+│   └── report.py          <- gráficas y resumen de las pruebas de carga (make load-report)
 ├── models/                <- copias locales opcionales de modelos (no versionado; la imagen no las incluye)
 ├── notebooks
 │   └── 1.0-dfc-exploracion-mibici.ipynb   <- exploración (solo análisis)
@@ -61,18 +66,21 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ├── reports
 │   ├── entrega3-propuestas-oscar.md        <- entrega 3: qué se hizo y qué falta
 │   ├── validacion_datos.md                 <- hallazgos de DeepChecks por pregunta
+│   ├── carga/             <- resultados de Locust y docker stats por escenario, y resultados.md
+│   ├── monitoreo/         <- reportes de drift de Evidently y resultado del A/B de P1
 │   ├── seguridad/         <- salida de bandit, pip-audit y la revisión del historial
 │   ├── deepchecks/        <- reportes HTML de make validate (no versionado)
 │   └── figures/           <- capturas de MLflow, DeepChecks, pruebas, seguridad y la API
 ├── scripts
 │   ├── run_experiments.sh <- todos los runs de la entrega y el registro de champions
 │   └── compose_smoke_model.py <- modelo de humo de P1 para la prueba del sistema en CI
-├── tests/                 <- pruebas de ingesta, features, modelado, métricas, reproducibilidad y validación
+├── tests/                 <- pruebas de ingesta, features, modelado, métricas, reproducibilidad, validación, API, A/B y carga
 └── mibici                 <- módulo del proyecto
     ├── config.py          <- rutas, fechas, cortes, semilla y parámetros en un solo lugar
     ├── dataset.py         <- ingesta reproducible y verificación (CLI)
     ├── features.py        <- feature engineering de P1, P2 y P3 (CLI)
     ├── validation.py      <- validación de datos con DeepChecks (CLI)
+    ├── monitoring.py      <- reportes de drift con Evidently
     ├── plots.py           <- gráficas que se registran como artefactos
     ├── api
     │   ├── main.py        <- API REST (FastAPI): /health, /models, /predict/p1, p2 y p3
@@ -83,6 +91,8 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
         ├── search.py      <- búsqueda con nested runs (punto de entrada search)
         ├── registry.py    <- Model Registry y alias (punto de entrada register)
         ├── predict.py     <- predicciones de test con el modelo de un alias
+        ├── retrain.py     <- reentrena P1 con parte del periodo actual (punto de entrada retrain)
+        ├── abtest.py      <- A/B de P1 entre dos alias con bootstrap por estación (punto de entrada abtest)
         ├── p1.py, p2.py, p3.py  <- tabla de modelos y run de cada pregunta
         ├── tracking.py    <- servidor, experimento, parámetros comunes y etiquetas
         ├── artifacts.py   <- modelo con firma, datos, gráficas y configuración por subcarpeta
@@ -170,11 +180,11 @@ Versiones en producción (corrida oficial; justificación en [`docs/TC5061_Repor
 
 | Modelo registrado | `@champion` | `@challenger` |
 |---|---|---|
-| `mibici-equipo34-p1-demanda` | v1 · `p1-hgb-regressor-lags-calendario[learning_rate=0.1]` | v2 · `p1-random-forest-lags-calendario` |
+| `mibici-equipo34-p1-demanda` | v1 · `p1-hgb-regressor-lags-calendario[learning_rate=0.1]` | v3 · `p1-hgb-reentrenado-hasta-2026-06` (hasta la entrega 8: v2 · `p1-random-forest-lags-calendario`) |
 | `mibici-equipo34-p2-riesgo` | v1 · `p2-hgb-classifier-flujos-lag[learning_rate=0.1]` | v2 · `p2-random-forest-flujos-lag` |
 | `mibici-equipo34-p3-grupos` | v1 · `p3-kmeans-perfiles-uso` (k = 3) | v2 · `p3-birch-perfiles-uso` |
 
-En P1 y P2 el champion es la mejor candidata por la métrica de validación y el challenger, la mejor de otra familia. En P3 la mejor silueta es de la mezcla gaussiana, pero su asignación es inestable entre periodos (ARI 0.30 con covarianza diagonal y 0.01 con completa), así que `scripts/run_experiments.sh` fija el champion en KMeans k = 3 (ARI 0.45) y el challenger en Birch (ARI 0.53).
+En P1 y P2 el champion es la mejor candidata por la métrica de validación y el challenger, la mejor de otra familia. En P1, el monitoreo de drift llevó a reentrenar el champion con datos hasta junio de 2026 (`mlflow run . -e retrain`); esa versión, v3, reemplazó al random forest como `@challenger` y es la que compara el [A/B testing](#análisis-de-ab-testing-y-monitoreo-de-data-drift-p1). En P3 la mejor silueta es de la mezcla gaussiana, pero su asignación es inestable entre periodos (ARI 0.30 con covarianza diagonal y 0.01 con completa), así que `scripts/run_experiments.sh` fija el champion en KMeans k = 3 (ARI 0.45) y el challenger en Birch (ARI 0.53).
 
 ### Cómo agregar un modelo
 
@@ -196,7 +206,7 @@ Experimento `mibici-equipo34`, corrida oficial (64 runs con el mismo commit y `g
 | P1 | `p1-baseline-historico-estacion-dia-semana` (baseline) | wape 0.242 | mae 8.11 · wape 0.298 |
 | P1 | `p1-poisson-lineal-lags-calendario[alpha=0.1]` (mejor lineal) | wape 0.197 | mae 5.97 · wape 0.219 |
 | P1 | `p1-ridge-lags-calendario` | wape 0.214 | mae 6.36 · wape 0.233 |
-| P1 | `p1-random-forest-lags-calendario` (challenger) | wape 0.180 | mae 5.40 · wape 0.198 |
+| P1 | `p1-random-forest-lags-calendario` (challenger hasta la entrega 8) | wape 0.180 | mae 5.40 · wape 0.198 |
 | P1 | `p1-hgb-regressor-lags-calendario[loss=squared_error]` | wape 0.179 | mae 5.41 · wape 0.198 |
 | P1 | **`p1-hgb-regressor-lags-calendario[learning_rate=0.1]` (champion)** | **wape 0.176** | **mae 5.33 · wape 0.196** |
 | P2 | `p2-baseline-persistencia-semanal` (baseline) | pr_auc 0.397 | pr_auc 0.388 · f1 0.350 |
@@ -230,7 +240,7 @@ Los champions de P1, P2 y P3 se sirven con una API REST de [FastAPI](https://fas
 - **P2 (riesgo de desbalance en el siguiente bloque de 3 h)** es la que justifica el servicio en línea: el equipo de rebalanceo consulta antes de cada bloque qué estaciones van a quedar vacías o llenas, con los flujos de las últimas horas. Una predicción por lotes calculada la noche anterior no tendría los lags del bloque anterior (`net_flow_lag1`, `departures_lag1`).
 - **P1 (viajes del día siguiente)** y **P3 (grupo de la estación)** cambian una vez al día o menos. Pueden consumir la misma API (un tablero que pide las ~480 estaciones en una petición, hasta 1000 registros), y para el periodo de test completo sigue estando la ruta por lotes `make predict Q=p1`.
 
-Los modelos son pequeños (≈3 MB) y responden en milisegundos, así que un solo contenedor sin GPU alcanza. La API no calcula features: recibe las variables ya construidas, igual que en `mibici/features.py`. Calcularlas en línea a partir de los viajes es parte de la arquitectura de la siguiente entrega.
+Los modelos son pequeños (≈3 MB) y responden en milisegundos, así que un solo contenedor sin GPU alcanza: con 2 vCPU atiende 71 peticiones por segundo con 1 worker y 112 con 2 (ver [Pruebas de carga](#pruebas-de-carga-con-locust)). La API no calcula features: recibe las variables ya construidas, igual que en `mibici/features.py`; calcularlas en línea a partir de los viajes queda fuera del alcance de la API.
 
 ### De dónde sale el modelo
 
@@ -388,6 +398,7 @@ python -m pytest tests -v    # con el nombre de cada prueba
 | `test_api.py` | Endpoints REST, esquemas de P1, P2 y P3, validación de entradas y salidas, carga desde el registry por alias o desde una copia local | Variables faltantes, de más o fuera de rango; perfil de P3 que no suma 1; salida inválida del modelo; registros vacíos; MLflow no disponible |
 | `test_reproducibility.py` | **Reproducibilidad:** entrenar dos veces con `SEED` da las mismas predicciones | HGB y random forest de P1 y P2, MiniBatchKMeans y mezcla de gaussianas de P3; control: con otros datos el modelo sí cambia |
 | `test_validation.py` | Las suites de DeepChecks detectan nulos, duplicados, columnas constantes y drift | Columna constante conocida (excepción declarada) contra una nueva |
+| `test_load_report.py` | Lectura de `docker stats`/`podman stats`, resumen de los CSV de Locust, escalones del estrés y capacidad con el SLO | Unidades de memoria de Docker (MiB) y Podman (MB); segundos de transición entre escalones y fila final de Locust; ningún escalón dentro del SLO |
 
 **Reproducibilidad.** Las pruebas llaman a las funciones de entrenamiento del proyecto (`p1_hgb`, `p2_random_forest`, `p3_minibatch_kmeans`, etc.), no solo a scikit-learn, con tablas sintéticas que tienen las mismas columnas que los datasets reales. Todos los modelos usan `random_state=SEED` (`SEED = 42` en `config.py`). Los random forest entrenan árboles idénticos, pero con `n_jobs=-1` suman las predicciones de los árboles en paralelo y el orden de la suma cambia los últimos bits (diferencias de 1e-15), así que las predicciones se comparan con una tolerancia de 1e-12 y no bit a bit.
 
@@ -404,6 +415,72 @@ python -m pytest tests -v    # con el nombre de cada prueba
    - solo en `main`, publica la imagen probada en GitHub Container Registry (`ghcr.io/diegofalconcostilla/mibici-api:<sha>` y `:latest`).
 
 ![Ejecución de las pruebas](reports/figures/pruebas/pytest.png)
+
+## Pruebas de carga con Locust
+
+[Locust](https://locust.io/) simula usuarios concurrentes contra la API levantada con Compose y mide peticiones por segundo (RPS), latencia y errores; al mismo tiempo, `load/docker_stats.py` registra CPU y memoria de los contenedores con `docker stats` (o `podman stats`). Los resultados son el insumo del análisis de costo por inferencia.
+
+```bash
+make compose-up CONTAINER=docker                      # MLflow + API con los champions del registry
+make load-test CONTAINER=docker ESCENARIO=base        # 20 usuarios, 2 min
+make load-test CONTAINER=docker ESCENARIO=nominal     # 80 usuarios, 3 min
+make load-test CONTAINER=docker ESCENARIO=estres      # escalones de 20 usuarios cada 30 s hasta 200
+make load-report                                      # gráficas y reports/carga/resultados.md
+```
+
+Con Podman se omite `CONTAINER=docker` (es el motor por defecto del Makefile); la máquina de Podman necesita más memoria que el límite de 2 GB de la API: `podman machine set --memory 4096`.
+
+Cada corrida deja en `reports/carga/<escenario>/` el reporte HTML de Locust (`locust.html`), los CSV de estadísticas (`locust_stats.csv`, y `locust_stats_history.csv` con una fila por segundo) y `recursos.csv` (CPU y memoria cada ~2 s). Para explorar en vivo: `locust -f load/locustfile.py` y abrir <http://localhost:8089>.
+
+**Escenario de tráfico** (`load/locustfile.py`). Cada usuario espera entre 0.5 y 2 s entre peticiones y elige una tarea según la [estrategia de despliegue](#estrategia-de-despliegue):
+
+| Tarea | Peso | Petición |
+|---|---:|---|
+| Riesgo de desbalance (P2) | 6 | `examples/api/p2.json`: la consulta en tiempo real del equipo de rebalanceo |
+| Demanda del día siguiente (P1) | 2 | `examples/api/p1.json` (2 estaciones) |
+| Grupo de la estación (P3) | 1 | `examples/api/p3.json` |
+| Tablero de P1 | 1 | 480 estaciones en una sola petición |
+| Petición inválida | 1 | `examples/api/p1_invalido.json`: cuenta como éxito si la API responde 422 |
+
+Una respuesta 200 solo cuenta como éxito si trae una predicción por registro y el modelo viene del registry. Antes de medir, el locustfile hace peticiones de calentamiento: la primera predicción descarga el modelo de MLflow (~0.4-0.9 s) y, sin calentar, ese arranque en frío inflaba el p95 de P2 de 45 ms a 1.1 s en una corrida de 30 s.
+
+**Resultados.** Docker Desktop en un MacBook Pro M3 Max (4 vCPU y 16 GB asignados a Docker); Locust corre en la misma máquina. Contenedor de la API con los límites del Compose: 2 vCPU y 2 GB. Detalle por escalón en [`reports/carga/resultados.md`](reports/carga/resultados.md).
+
+| Escenario | Workers | Peticiones | Errores | RPS | p50 (ms) | p95 (ms) | p99 (ms) | CPU API máx. | Memoria API máx. |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| base | 1 | 1,868 | 0 % | 15.6 | 25 | 54 | 80 | 48 % | 239 MiB |
+| nominal | 1 | 10,804 | 0 % | 60.2 | 35 | 150 | 250 | 137 % | 242 MiB |
+| nominal | 2 | 10,757 | 0 % | 60.0 | 23 | 53 | 90 | 114 % | 444 MiB |
+
+CPU en porcentaje de un vCPU (100 % = un núcleo).
+
+![RPS, latencia y errores por escenario](reports/figures/carga/carga_series.png)
+
+**Capacidad.** En la prueba de estrés el RPS crece con los usuarios hasta que la API se satura; a partir de ahí el RPS se queda plano y las peticiones esperan en cola, así que la latencia sube. Tomamos como capacidad el escalón con más RPS cuyo p95 no pasa de 300 ms:
+
+| Workers de uvicorn | Capacidad | p95 en ese punto | CPU API | Memoria API |
+|---:|---:|---:|---:|---:|
+| 1 | 71 RPS (100 usuarios) | 220 ms | 133 % | 231 MiB |
+| 2 | 112 RPS (160 usuarios) | 210 ms | 193 % | 472 MiB |
+
+![Curva de saturación con 1 worker](reports/figures/carga/carga_saturacion.png)
+
+- **El cuello de botella es la CPU de un solo proceso.** Con 1 worker la CPU se queda en ~160 % de los 200 % permitidos: Python ejecuta el código de la API en un solo hilo a la vez, y solo numpy y scikit-learn usan algo más de un núcleo. Con `API_WORKERS=2` (dos procesos) la CPU llega al 200 % del límite y la capacidad sube 57 % con los mismos recursos; con la misma carga nominal, el p95 baja de 150 a 53 ms.
+- **La memoria sobra.** Cada worker carga su propia copia de los tres modelos (~240 MiB por worker); con 2 workers se usan ~500 MiB de los 2 GB del límite.
+- **Sin errores.** 0 fallas en las 84,089 peticiones de las cinco corridas, incluso con la API saturada: la saturación se ve como latencia, no como errores.
+- **Límites de la medición.** Locust y los contenedores comparten la máquina, y la API corre con un solo contenedor en Docker Desktop. Los números sirven para comparar configuraciones y dimensionar, no como capacidad de producción.
+
+![1 contra 2 workers con el mismo límite de CPU](reports/figures/carga/carga_workers.png)
+
+Para repetir la comparación de workers sin pisar los resultados de 1 worker:
+
+```bash
+API_WORKERS=2 docker compose up -d --wait api
+make load-test CONTAINER=docker ESCENARIO=nominal SUFIJO=2workers
+make load-test CONTAINER=docker ESCENARIO=estres SUFIJO=2workers LOAD_MAX_USERS=300
+make load-report
+docker compose up -d --wait api                       # de vuelta a API_WORKERS del .env (1)
+```
 
 ## Validación de datos
 
@@ -448,7 +525,7 @@ Para leer un reporte, empieza por la tabla *Conditions Summary*: ✓ pasó, ✖ 
 ## Seguridad
 
 ```bash
-make security    # bandit sobre mibici/ y pip-audit sobre las dependencias instaladas
+make security    # bandit sobre mibici/ y load/, y pip-audit sobre las dependencias instaladas
 ```
 
 La salida completa de cada chequeo está en [`reports/seguridad/`](reports/seguridad/).
@@ -461,7 +538,7 @@ La salida completa de cada chequeo está en [`reports/seguridad/`](reports/segur
 - La ingesta elimina las columnas personales de los viajes (usuario, género y año de nacimiento) antes de guardar nada. `test_clean_trips_drops_personal_data_and_invalid_rows` lo comprueba.
 - Revisamos todo el historial de Git: ninguna línea agregada contiene `password`, `secret`, `token` o `api_key` con un valor asignado, y no hay archivos `.env`, `.pem`, `.key` ni de credenciales versionados.
 
-**bandit (análisis del código).** Reportó 3 avisos de severidad baja, todos en `git_info()` de `tracking.py`, que llama a `git` para registrar el commit en cada run: B404 (importar `subprocess`), B603 (llamar un proceso) y B607 (ruta parcial del ejecutable). Son falsos positivos: los argumentos están fijos en el código, no vienen del usuario y no se usa shell. `git` se busca en el `PATH` a propósito porque su ruta cambia entre sistemas operativos. Se marcaron con `# nosec` y la explicación en el código; ahora bandit no reporta ningún problema.
+**bandit (análisis del código).** Reportó 3 avisos de severidad baja, todos en `git_info()` de `tracking.py`, que llama a `git` para registrar el commit en cada run: B404 (importar `subprocess`), B603 (llamar un proceso) y B607 (ruta parcial del ejecutable). Son falsos positivos: los argumentos están fijos en el código, no vienen del usuario y no se usa shell. `git` se busca en el `PATH` a propósito porque su ruta cambia entre sistemas operativos. Se marcaron con `# nosec` y la explicación en el código; ahora bandit no reporta ningún problema. `make security` también revisa `load/`: `docker_stats.py` llama a `docker stats` o `podman stats` con el mismo patrón (argumentos fijos, sin shell) y lleva la misma marca.
 
 **pip-audit (dependencias).** Se audita el entorno instalado y no solo `requirements.txt`, para incluir también las dependencias indirectas. La primera corrida reportó 45 avisos de vulnerabilidad en 5 paquetes:
 
@@ -497,7 +574,7 @@ Se realizó una evaluación A/B fuera de muestra (out-of-sample) entre el 01 de 
 
 - Comportamiento por Segmentos: El modelo B reduce el error de forma consistente en los segmentos de mayor volumen: estaciones existentes (-1.4% en WAPE, 373 estaciones), días laborables (-1.4%), fines de semana/festivos (-0.3%), julio (-1.5%) y agosto (-0.6%). El único incremento marginal de error ocurre en el grupo de 98 estaciones nuevas (+2.0% en WAPE), comportamiento esperado debido a su bajo volumen promedio (9.22 viajes/día) y menor historial acumulado.
 
-- Decisión Final: Se promueve el modelo challenger v3 como el nuevo @champion en producción, ya que reduce consistentemente las métricas globales de error con respaldo estadístico del 99.8%.
+- Decisión Final: El A/B recomienda promover el challenger v3 a @champion, ya que reduce consistentemente las métricas globales de error con respaldo estadístico del 99.8%. La promoción no es automática: `make abtest` solo registra la decisión (run `abtest` y etiquetas en ambas versiones), y mover el alias requiere `python -m mibici.modeling.abtest --promote`. Mientras no se ejecute, v1 sigue como @champion y v3 como @challenger, y la API puede servir v3 con `?alias=challenger`. Para promoverlo basta mover el alias y reiniciar la API, sin reconstruir la imagen.
 
 **2. Interpretación del Monitoreo y Data Drift**
 
@@ -524,9 +601,10 @@ El monitoreo del periodo actual de producción (mayo a agosto de 2026, 50,561 fi
 | Configuración en un solo lugar | Rutas, fechas, cortes, semilla, umbrales, hiperparámetros por defecto, métricas de selección y nombres del Model Registry en `mibici/config.py`. |
 | Experimento reproducible de punta a punta | MLflow Project con entorno fijo (`python_env.yaml`) y `make all` desde un clon limpio. |
 | Dependencias fijas | `requirements.txt` con `==` en todas las dependencias. |
-| Nada de datos, modelos ni MLflow en Git | `.gitignore` excluye `data/*` (salvo el manifiesto), `*.csv`, `*.parquet`, `mlruns/`, `mlartifacts/`, `mlflow.db`, `models/*`, modelos serializados y `.env`. |
+| Nada de datos, modelos ni MLflow en Git | `.gitignore` excluye `data/*` (salvo el manifiesto), `*.csv` (salvo las métricas de carga de `reports/carga/`), `*.parquet`, `mlruns/`, `mlartifacts/`, `mlflow.db`, `models/*`, modelos serializados y `.env`. |
 | Cambios por Pull Request revisado | `main` protegida: no admite push directo, ni siquiera de administradores. |
-| Integración continua | GitHub Actions corre `make lint`, `make test` y `make security` en cada Pull Request (`.github/workflows/ci.yml`). |
+| Integración continua | GitHub Actions corre `make lint`, `make test` y `make security`, construye la imagen y prueba el sistema con Compose en cada Pull Request; en `main` publica la imagen en GHCR (ver [CI/CD](#cicd-con-github-actions)). |
+| Capacidad medida antes de dimensionar | Pruebas de carga reproducibles (`make load-test`, `make load-report`) con CPU y memoria de los contenedores (ver [Pruebas de carga](#pruebas-de-carga-con-locust)). |
 | Entrenamiento reproducible | Todos los modelos usan `random_state=SEED`; `tests/test_reproducibility.py` entrena dos veces y compara las predicciones. |
 | Sin fuga de información del futuro | Lags con `shift` >= horizonte (validado en `add_lag_features` y en `tests/`), partición temporal y perfiles de P3 calculados solo con train. |
 

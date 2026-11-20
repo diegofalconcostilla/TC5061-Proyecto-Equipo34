@@ -3,6 +3,8 @@
 !/data/manifest.json
 *.csv
 *.parquet
+# Resultados de las pruebas de carga: son métricas de la API, no datos de MiBici
+!/reports/carga/**/*.csv
 
 # MLflow
 mlruns/
