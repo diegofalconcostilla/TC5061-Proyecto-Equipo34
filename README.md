@@ -655,7 +655,7 @@ Seguimos **GitHub Flow**:
 | Diego Falcón Costilla | Ingesta y versionado de datos, experimento base en MLflow |
 | Oscar Elton | Modelos intermedios (antes de los boostings) y refactorización de código |
 | Mariana Favarony Avila | MLOps & Experiment Validation|
-| Javier Alejandro García | Feature Engineering |
+| Javier Alejandro Garcia Flores | Feature Engineering |
 
 ## Referencias
 
