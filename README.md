@@ -66,6 +66,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ├── reports
 │   ├── entrega3-propuestas-oscar.md        <- entrega 3: qué se hizo y qué falta
 │   ├── validacion_datos.md                 <- hallazgos de DeepChecks por pregunta
+│   ├── TC5061_Operacion_FinOps_Equipo34.pdf <- reporte de operación: carga y análisis FinOps (entrega 7)
 │   ├── carga/             <- resultados de Locust y docker stats por escenario, y resultados.md
 │   ├── monitoreo/         <- reportes de drift de Evidently y resultado del A/B de P1
 │   ├── seguridad/         <- salida de bandit, pip-audit y la revisión del historial
@@ -481,6 +482,31 @@ make load-test CONTAINER=docker ESCENARIO=estres SUFIJO=2workers LOAD_MAX_USERS=
 make load-report
 docker compose up -d --wait api                       # de vuelta a API_WORKERS del .env (1)
 ```
+
+## Análisis FinOps: costo por inferencia
+
+El reporte [`reports/TC5061_Operacion_FinOps_Equipo34.pdf`](reports/TC5061_Operacion_FinOps_Equipo34.pdf) estima cuánto cuesta operar la API a partir de la capacidad medida con Locust y del consumo de `docker stats` (ver [Pruebas de carga](#pruebas-de-carga-con-locust)). Toma como referencia tarifas On-Demand de AWS us-east-1: t3.small (2 vCPU, 2 GiB, USD 0.0208/h) y t3.medium (2 vCPU, 4 GiB, USD 0.0416/h).
+
+- **Costo por petición** = costo por hora de la instancia / peticiones por hora a capacidad máxima (p95 ≤ 300 ms).
+- **Costo por predicción** = costo por hora / predicciones por hora. Con los pesos del locustfile, una petición trae en promedio (6·2 + 2·2 + 1·2 + 1·480 + 1·0) / 11 ≈ 45.3 registros a predecir: P1, P2 y P3 mandan 2, el tablero 480 y la petición inválida ninguno.
+
+| Indicador | 1 worker | 2 workers | Cambio |
+|---|---:|---:|---:|
+| Capacidad (RPS) | 71.0 | 111.6 | +57.2 % |
+| Peticiones por hora | 255,662 | 401,723 | +57.1 % |
+| USD por millón de peticiones (t3.small) | 0.0814 | 0.0518 | −36.4 % |
+| USD por millón de peticiones (t3.medium) | 0.1627 | 0.1036 | −36.4 % |
+| USD por millón de predicciones (t3.small) | 0.00180 | 0.00114 | −36.4 % |
+| USD por millón de predicciones (t3.medium) | 0.00359 | 0.00229 | −36.4 % |
+
+**Optimizaciones propuestas**
+
+1. **`API_WORKERS=2`.** Con 1 worker la CPU se queda en ~160 % de los 200 % del límite; con 2 la aprovecha completa y el costo unitario baja 36.4 % sin pagar más por hora.
+2. **Rightsizing de memoria.** El máximo observado fue 256 MiB con 1 worker y 515 MiB con 2 (a 300 usuarios), frente a un límite de 2,048 MiB. Con `API_MEMORY` en 768 MiB o 1 GiB cabe en una t3.small en lugar de una t3.medium: de USD 30.37 a USD 15.18 al mes (730 h).
+3. **Savings Plans o instancias Spot.** La API no guarda estado (descarga el modelo del registry y se calienta al arrancar), así que tolera reemplazos de instancia; el descuento frente a On-Demand es de 30-60 %.
+4. **Caché para P1 y P3.** Sus predicciones cambian a lo más una vez al día; cachear respuestas repetidas, como el tablero de 480 estaciones, libera CPU para P2, que sí se consulta en línea.
+
+Los costos son estimaciones comparativas: la capacidad se midió en Docker Desktop con Locust en la misma máquina, y el costo por predicción depende de la mezcla de tareas del escenario sintético.
 
 ## Validación de datos
 
