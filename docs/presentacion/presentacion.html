@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>TC5061 Proyecto Final - Equipo 34</title>
+<!-- Fuente de docs/TC5061_Proyecto_Final_Equipo34.pdf. Para regenerar el PDF:
+     msedge --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=docs/TC5061_Proyecto_Final_Equipo34.pdf docs/presentacion/presentacion.html -->
+<style>
+  @page { size: 13.333in 7.5in; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1d2433; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .s { width: 13.333in; height: 7.5in; padding: 0.5in 0.65in 0.45in; position: relative; overflow: hidden; page-break-after: always; break-after: page; display: flex; flex-direction: column; }
+  .s:last-child { page-break-after: auto; }
+  .s::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 0.14in; background: #0b3d91; }
+  .k { font-size: 11pt; letter-spacing: .12em; text-transform: uppercase; color: #0b3d91; font-weight: bold; margin: 0 0 4pt; }
+  h1 { font-size: 30pt; margin: 0 0 14pt; line-height: 1.1; }
+  h2 { font-size: 19pt; margin: 0 0 6pt; color: #0b3d91; }
+  p, li { font-size: 17pt; line-height: 1.35; margin: 0 0 6pt; }
+  ul { margin: 0; padding-left: 18pt; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: .9em; background: #eef2f8; padding: 0 3pt; border-radius: 3pt; }
+  .foot { position: absolute; left: 0.65in; right: 0.65in; bottom: 0.2in; font-size: 9pt; color: #7a8394; display: flex; justify-content: space-between; }
+  .cols { display: flex; gap: 0.35in; flex: 1; min-height: 0; }
+  .cols > div { flex: 1; min-width: 0; }
+  .c40 { flex: 0 0 40% !important; }
+  .c35 { flex: 0 0 35% !important; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5pt; }
+  th, td { border-bottom: 1px solid #d5dbe5; padding: 7pt 8pt; text-align: left; vertical-align: top; }
+  th { background: #0b3d91; color: #fff; font-weight: bold; }
+  td.n, th.n { text-align: right; }
+  tr.hl td { background: #e8f0ff; font-weight: bold; }
+  img.fig { max-width: 100%; max-height: 100%; display: block; border: 1px solid #d5dbe5; }
+  .figbox { flex: 0 1 auto; min-height: 0; display: flex; align-items: flex-start; justify-content: center; }
+  .cap { font-size: 12pt; color: #5b6475; margin-top: 4pt; }
+  .card { background: #f3f6fb; border-left: 4pt solid #0b3d91; padding: 8pt 13pt; margin-bottom: 9pt; font-size: 15pt; line-height: 1.35; }
+  .card b { color: #0b3d91; }
+  .big { font-size: 34pt; font-weight: bold; color: #0b3d91; line-height: 1; }
+  .stats { display: flex; gap: 14pt; margin: 6pt 0 14pt; }
+  .stat { flex: 1; background: #f3f6fb; padding: 10pt 12pt; }
+  .stat .l { font-size: 14pt; color: #5b6475; margin-top: 4pt; }
+  /* Arquitectura */
+  .flow { display: flex; align-items: stretch; gap: 6pt; margin: 4pt 0 12pt; }
+  .box { flex: 1; border: 1.5pt solid #0b3d91; border-radius: 6pt; padding: 7pt 8pt; background: #fff; }
+  .box h3 { font-size: 15pt; margin: 0 0 3pt; color: #0b3d91; }
+  .box p { font-size: 13pt; line-height: 1.3; margin: 0; }
+  .box.ops { border-color: #b4501a; } .box.ops h3 { color: #b4501a; }
+  .box.gov { border-color: #2a7a3b; } .box.gov h3 { color: #2a7a3b; }
+  .arr { align-self: center; font-size: 18pt; color: #7a8394; }
+  .lane { font-size: 12pt; letter-spacing: .1em; text-transform: uppercase; color: #7a8394; font-weight: bold; margin-top: 4pt; }
+  .pipe { display: flex; gap: 0; margin: 10pt 0 14pt; }
+  .pipe div { flex: 1; background: #0b3d91; color: #fff; padding: 14pt 14pt 14pt 26pt; font-size: 14pt; clip-path: polygon(0 0, 92% 0, 100% 50%, 92% 100%, 0 100%, 8% 50%); margin-right: -10pt; }
+  .pipe div:first-child { clip-path: polygon(0 0, 92% 0, 100% 50%, 92% 100%, 0 100%); padding-left: 14pt; }
+  .pipe div b { display: block; font-size: 16pt; margin-bottom: 2pt; }
+  .pipe div.alt { background: #2f5fb3; }
+  /* Portada */
+  .cover { justify-content: center; }
+  .cover::before { width: 100%; height: 0.14in; bottom: auto; }
+  .cover img { width: 3.4in; margin-bottom: 22pt; }
+  .cover h1 { font-size: 38pt; margin-bottom: 10pt; }
+  .cover .sub { font-size: 18pt; color: #44506a; margin-bottom: 30pt; }
+  .cover .team { font-size: 15pt; line-height: 1.55; color: #1d2433; }
+</style>
+</head>
+<body>
+
+<!-- 1. Portada -->
+<section class="s cover">
+  <img src="img/logo_tec.jpg" alt="Tecnológico de Monterrey">
+  <p class="k">TC5061 · Operaciones de aprendizaje automático · Proyecto final</p>
+  <h1>MiBici: de los datos abiertos a un sistema de ML en producción</h1>
+  <p class="sub">Demanda, riesgo de desbalance y grupos de estaciones del sistema de bicicleta pública de Guadalajara</p>
+  <div class="team">
+    <b>Equipo 34</b><br>
+    Diego Falcón Costilla A01139580 · Oscar Elton A01840474<br>
+    Mariana Favarony Avila A01704671 · Javier Alejandro Garcia Flores A01797672<br>
+    Repositorio: github.com/diegofalconcostilla/TC5061-Proyecto-Equipo34 · 29 de noviembre de 2026
+  </div>
+</section>
+
+<!-- 2. Problema -->
+<section class="s">
+  <p class="k">El problema</p>
+  <h1>MiBici necesita anticipar la demanda para mover bicicletas a tiempo</h1>
+  <div class="stats">
+    <div class="stat"><div class="big">11.7 M</div><div class="l">viajes limpios, 2024-01 a 2026-08</div></div>
+    <div class="stat"><div class="big">473</div><div class="l">estaciones con viajes (371 → 471 activas en un año)</div></div>
+    <div class="stat"><div class="big">3</div><div class="l">preguntas de negocio, tres usuarios distintos</div></div>
+  </div>
+  <table>
+    <tr><th>#</th><th>Pregunta</th><th>Formulación</th><th>Usuario y decisión</th></tr>
+    <tr><td>P1</td><td>¿Cuántos viajes saldrán de cada estación?</td><td>Regresión, estación-día, horizonte 1 día</td><td>Operador: planeación de flota diaria</td></tr>
+    <tr><td>P2</td><td>¿Qué estación quedará vacía o llena?</td><td>Clasificación, siguiente bloque de 3 h: |llegadas − salidas| ≥ 0.5 × capacidad</td><td>Rebalanceo: qué estaciones visitar, en línea</td></tr>
+    <tr><td>P3</td><td>¿Qué estaciones se usan igual?</td><td>Clustering del perfil horario de uso</td><td>Planeación urbana: ubicar estaciones y campañas</td></tr>
+  </table>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>2</span></div>
+</section>
+
+<!-- 3. Arquitectura -->
+<section class="s">
+  <p class="k">La solución</p>
+  <h1>Un sistema de extremo a extremo y reproducible</h1>
+  <div class="lane">Experimentación</div>
+  <div class="flow">
+    <div class="box"><h3>Ingesta</h3><p>Portal de datos abiertos → Parquet. Elimina datos personales. <code>data_version</code> en el manifiesto</p></div><span class="arr">→</span>
+    <div class="box"><h3>Features</h3><p><code>features.py</code>: lags con shift ≥ horizonte, calendario, perfiles. DeepChecks valida</p></div><span class="arr">→</span>
+    <div class="box"><h3>MLflow Project</h3><p>ingest · train · search · register · retrain · abtest</p></div><span class="arr">→</span>
+    <div class="box"><h3>Tracking</h3><p>64 runs: params, métricas, firma, gráficas, <code>git_commit</code></p></div><span class="arr">→</span>
+    <div class="box"><h3>Model Registry</h3><p>@champion / @challenger con etiquetas de linaje</p></div>
+  </div>
+  <div class="lane">Operación</div>
+  <div class="flow">
+    <div class="box ops"><h3>GitHub Actions</h3><p>lint, pytest, bandit, pip-audit, imagen, prueba con Compose, GHCR</p></div><span class="arr">→</span>
+    <div class="box ops"><h3>Docker Compose</h3><p>MLflow + API FastAPI; la API descarga el champion del registry</p></div><span class="arr">→</span>
+    <div class="box ops"><h3>Locust</h3><p>capacidad, latencia y CPU/memoria por escenario</p></div><span class="arr">→</span>
+    <div class="box ops"><h3>FinOps</h3><p>costo por petición y por predicción, rightsizing</p></div>
+  </div>
+  <div class="lane">Monitoreo y gobernanza</div>
+  <div class="flow">
+    <div class="box gov"><h3>Evidently</h3><p>drift contra entrenamiento y misma temporada</p></div><span class="arr">→</span>
+    <div class="box gov"><h3>Reentrenamiento</h3><p><code>-e retrain</code> → v3 @challenger</p></div><span class="arr">→</span>
+    <div class="box gov"><h3>A/B testing</h3><p>bootstrap por estación, decisión y promoción explícita</p></div><span class="arr">→</span>
+    <div class="box gov"><h3>Model Card</h3><p>uso previsto, segmentos, riesgos éticos</p></div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>3</span></div>
+</section>
+
+<!-- 4. Estructura y experimentación -->
+<section class="s">
+  <p class="k">Estructura y experimentación</p>
+  <h1>Cookiecutter + MLflow Project: cada run es reproducible</h1>
+  <div class="cols">
+    <div class="c40">
+      <div class="card"><b>Cookiecutter Data Science.</b> Lógica en el paquete <code>mibici/</code>; notebooks solo para explorar; toda la configuración y la semilla en <code>config.py</code>.</div>
+      <div class="card"><b>Versionado de datos.</b> Los datos no van a Git: <code>data/manifest.json</code> con hashes. Cada run guarda <code>data_version</code> y <code>train_data_hash</code>.</div>
+      <div class="card"><b>MLflow Project.</b> <code>make all</code> = ingesta + 64 runs + registro, en un entorno aislado (<code>python_env.yaml</code>, uv).</div>
+      <div class="card"><b>Tracking.</b> Baselines, candidatas y búsquedas con nested runs; corrida oficial con un solo commit y <code>git_dirty=false</code>.</div>
+    </div>
+    <div style="display:flex;flex-direction:column">
+      <div class="figbox"><img class="fig" src="../../reports/figures/mlflow/01_lista_runs.png" alt="Runs en MLflow"></div>
+      <p class="cap">Experimento <code>mibici-equipo34</code> en MLflow: runs por pregunta con su etapa de trabajo.</p>
+    </div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>4</span></div>
+</section>
+
+<!-- 5. Resultados -->
+<section class="s">
+  <p class="k">Resultados</p>
+  <h1>Los champions superan a sus baselines en datos que nunca vieron</h1>
+  <table>
+    <tr><th>Pregunta</th><th>Métrica (prueba, may-ago 2026)</th><th class="n">Mejor baseline</th><th class="n">Champion</th><th>Champion</th></tr>
+    <tr><td>P1 Demanda</td><td>WAPE (menor es mejor)</td><td class="n">0.261</td><td class="n"><b>0.196</b></td><td>HistGradientBoosting · −25 % de error · ~5 viajes por estación-día</td></tr>
+    <tr><td>P2 Riesgo</td><td>PR-AUC (prevalencia 2.5 %)</td><td class="n">0.388</td><td class="n"><b>0.462</b></td><td>HistGradientBoosting + umbral elegido en validación</td></tr>
+    <tr><td>P3 Grupos</td><td>Estabilidad ARI (train vs. 2026)</td><td class="n">0.271</td><td class="n"><b>0.446</b></td><td>KMeans k = 3 (silueta 0.142)</td></tr>
+  </table>
+  <div class="cols" style="margin-top:14pt">
+    <div><div class="card"><b>Selección solo con validación</b> (ene-abr 2026); prueba (may-ago) solo para reportar. Partición temporal: sin fuga del futuro.</div></div>
+    <div><div class="card"><b>P3:</b> la mezcla gaussiana tenía mejor silueta, pero su asignación era inestable (ARI 0.30). Elegimos estabilidad sobre la métrica.</div></div>
+    <div><div class="card"><b>P2:</b> el score no está calibrado; la API devuelve la clase, no un "% de riesgo".</div></div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>5</span></div>
+</section>
+
+<!-- 6. Registry -->
+<section class="s">
+  <p class="k">Modelo y Registry</p>
+  <h1>El registry es la única fuente de verdad de qué está en producción</h1>
+  <div class="cols">
+    <div class="c40">
+      <div class="card"><b>Aliases, no stages.</b> <code>@champion</code> sirve en la API; <code>@challenger</code> se evalúa y se consulta con <code>?alias=challenger</code>.</div>
+      <div class="card"><b>Linaje en cada versión.</b> <code>source_run_id</code> · <code>git_commit</code> · <code>data_version</code> · <code>train_data_hash</code> · métrica de selección.</div>
+      <div class="card"><b>Registro verificado.</b> Al asignar el alias se carga <code>models:/…@alias</code> y se predice el ejemplo; si falla, el registro falla.</div>
+      <div class="card"><b>Estado P1:</b> champion v1 · challenger v3 (reentrenado), con la promoción aprobada por el A/B.</div>
+    </div>
+    <div style="display:flex;flex-direction:column">
+      <div class="figbox"><img class="fig" src="img/a4_registry.png" alt="Model Registry"></div>
+      <p class="cap">Los tres modelos registrados con sus aliases (captura de la entrega de MLflow; después del reentrenamiento, el challenger de P1 es v3).</p>
+    </div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>6</span></div>
+</section>
+
+<!-- 7. Despliegue -->
+<section class="s">
+  <p class="k">Despliegue</p>
+  <h1>API FastAPI en contenedor: la imagen no lleva modelos</h1>
+  <div class="cols">
+    <div class="c40">
+      <div class="card"><b>Inferencia en línea.</b> P2 se consulta antes de cada bloque de 3 h con los flujos recientes; una predicción nocturna no tendría esos lags.</div>
+      <div class="card"><b>Modelo desde el registry.</b> Promover = mover el alias y reiniciar, sin reconstruir la imagen.</div>
+      <div class="card"><b>Contrato estricto.</b> Pydantic: 422 con campos faltantes, extra o fuera de rango; 503 si el registry no responde.</div>
+      <div class="card"><b>Compose:</b> <code>docker compose up --wait</code> levanta MLflow + API con healthchecks y límites de CPU/memoria.</div>
+    </div>
+    <div style="display:flex;flex-direction:column">
+      <div class="figbox"><img class="fig" src="../../reports/figures/api/api_contenedor_podman.png" alt="API en contenedor"></div>
+      <p class="cap">P1, P2 y P3 responden desde el contenedor con <code>"source": "registry"</code> y la versión del champion; una petición inválida devuelve 422.</p>
+    </div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>7</span></div>
+</section>
+
+<!-- 8. CI/CD -->
+<section class="s">
+  <p class="k">CI/CD con GitHub Actions</p>
+  <h1>Cada Pull Request prueba el sistema completo, no solo el código</h1>
+  <div class="pipe">
+    <div><b>Lint</b>ruff</div>
+    <div class="alt"><b>Pruebas</b>pytest con datos sintéticos</div>
+    <div><b>Seguridad</b>bandit · pip-audit</div>
+    <div class="alt"><b>Imagen</b>Buildx con caché</div>
+    <div><b>Sistema</b>Compose + modelo de humo</div>
+    <div class="alt"><b>Publicación</b>GHCR, solo en main</div>
+  </div>
+  <div class="cols">
+    <div><div class="card"><b>Prueba de punta a punta en CI:</b> registry vacío → 503; registra un modelo de humo de P1; la API lo descarga del servicio <code>mlflow</code> y responde 200; petición inválida → 422.</div></div>
+    <div><div class="card"><b>Pruebas que importan en ML:</b> reproducibilidad (entrenar dos veces con la misma semilla da lo mismo), lags sin fuga, eliminación de datos personales, A/B y reporte de carga.</div></div>
+    <div><div class="card"><b>Flujo de equipo:</b> <code>main</code> protegida, GitHub Flow, Conventional Commits; más de 30 Pull Requests integrados.</div></div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>8</span></div>
+</section>
+
+<!-- 9. Carga -->
+<section class="s">
+  <p class="k">Pruebas de carga con Locust</p>
+  <h1>Medimos la capacidad antes de dimensionar: el cuello es la CPU</h1>
+  <div class="cols">
+    <div class="c40">
+      <table>
+        <tr><th>Workers</th><th class="n">Capacidad</th><th class="n">p95</th><th class="n">Memoria</th></tr>
+        <tr><td>1</td><td class="n">71 RPS</td><td class="n">220 ms</td><td class="n">231 MiB</td></tr>
+        <tr class="hl"><td>2</td><td class="n">112 RPS</td><td class="n">210 ms</td><td class="n">472 MiB</td></tr>
+      </table>
+      <p style="font-size:13pt;color:#5b6475">Capacidad = escalón con más RPS y p95 ≤ 300 ms. API limitada a 2 vCPU y 2 GB.</p>
+      <ul>
+        <li>0 errores en 84,089 peticiones: la saturación se ve como latencia.</li>
+        <li>Con 1 worker la CPU se queda en ~160 % de 200 %; con 2, +57 % de capacidad con los mismos recursos.</li>
+        <li>La memoria sobra: ~240 MiB por worker.</li>
+      </ul>
+    </div>
+    <div style="display:flex;flex-direction:column">
+      <div class="figbox"><img class="fig" src="../../reports/figures/carga/carga_workers.png" alt="1 contra 2 workers"></div>
+      <p class="cap">RPS y latencia con 1 y 2 workers de uvicorn en la prueba de estrés por escalones.</p>
+    </div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>9</span></div>
+</section>
+
+<!-- 10. Drift + A/B -->
+<section class="s">
+  <p class="k">Monitoreo · Continuous Training · A/B testing</p>
+  <h1>El drift llevó a reentrenar; el A/B decidió con evidencia</h1>
+  <div class="cols">
+    <div style="flex:0 0 46%">
+      <div class="card"><b>Drift (Evidently).</b> 12/18 columnas contra el entrenamiento y 11/18 contra la misma temporada de 2025: no es estacional. Causa: +100 estaciones nuevas.</div>
+      <div class="card"><b>Reentrenamiento.</b> <code>-e retrain</code> con datos hasta junio de 2026 → v3 <code>@challenger</code>.</div>
+      <table style="font-size:13pt">
+        <tr><th>Jul-ago 2026</th><th class="n">v1</th><th class="n">v3</th><th>IC 95 % de B − A</th></tr>
+        <tr><td>WAPE</td><td class="n">0.1802</td><td class="n">0.1782</td><td>[−0.0036, −0.0004]</td></tr>
+        <tr><td>MAE</td><td class="n">4.87</td><td class="n">4.82</td><td>[−0.100, −0.011]</td></tr>
+      </table>
+      <p style="font-size:16pt;margin-top:8pt"><b>Decisión: promover v3</b> (P = 0.998). La promoción es explícita (<code>--promote</code>), no automática.</p>
+    </div>
+    <div style="display:flex;flex-direction:column">
+      <div class="figbox"><img class="fig" src="../../reports/analisis_monitoreo_p1/figures/p1_ab_wape_diario.png" alt="WAPE diario A/B"></div>
+      <p class="cap">WAPE diario del champion v1 y el challenger v3 en el periodo que ninguno vio (bootstrap por estación, 2,000 remuestreos).</p>
+    </div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>10</span></div>
+</section>
+
+<!-- 11. FinOps -->
+<section class="s">
+  <p class="k">FinOps</p>
+  <h1>Menos de 6 centavos de dólar por millón de peticiones</h1>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>AWS us-east-1, On-Demand</th><th class="n">1 worker</th><th class="n">2 workers</th></tr>
+        <tr><td>Peticiones por hora a capacidad</td><td class="n">255,662</td><td class="n">401,723</td></tr>
+        <tr class="hl"><td>USD por millón de peticiones (t3.small)</td><td class="n">0.0814</td><td class="n">0.0518</td></tr>
+        <tr><td>USD por millón de predicciones (t3.small)</td><td class="n">0.00180</td><td class="n">0.00114</td></tr>
+        <tr><td>USD por millón de peticiones (t3.medium)</td><td class="n">0.1627</td><td class="n">0.1036</td></tr>
+      </table>
+      <p style="font-size:13pt;color:#5b6475;margin-top:6pt">Costo por petición = costo por hora / peticiones por hora a capacidad (p95 ≤ 300 ms). Estimaciones comparativas.</p>
+    </div>
+    <div>
+      <h2>Optimizaciones</h2>
+      <div class="card"><b>2 workers:</b> −36 % de costo unitario sin pagar más por hora.</div>
+      <div class="card"><b>Rightsizing:</b> máximo 515 MiB usados de 2 GB → cabe en t3.small: de USD 30.37 a 15.18 al mes.</div>
+      <div class="card"><b>Spot / Savings Plans:</b> la API no guarda estado y tolera reemplazos (30-60 % menos).</div>
+      <div class="card"><b>Caché de P1 y P3:</b> cambian a lo más una vez al día; libera CPU para P2.</div>
+    </div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>11</span></div>
+</section>
+
+<!-- 12. Model Card -->
+<section class="s">
+  <p class="k">Gobernanza · Model Card</p>
+  <h1>Documentamos dónde el modelo falla y a quién afecta</h1>
+  <div class="cols">
+    <div>
+      <h2>MODEL_CARD.md</h2>
+      <ul>
+        <li>Uso previsto y <b>fuera de alcance</b>: nada de decisiones sobre personas; P2 no es una probabilidad.</li>
+        <li>Datos, privacidad (columnas personales eliminadas con prueba automatizada) y linaje.</li>
+        <li>Métricas globales y <b>por segmento</b>, monitoreo, disparadores de reentrenamiento y el ciclo de A/B.</li>
+      </ul>
+      <table style="margin-top:10pt">
+        <tr><th>Segmento P1</th><th class="n">WAPE v1</th></tr>
+        <tr><td>Estaciones existentes</td><td class="n">0.174</td></tr>
+        <tr class="hl"><td>Estaciones nuevas (98)</td><td class="n">0.287</td></tr>
+        <tr><td>Fin de semana o festivo</td><td class="n">0.225</td></tr>
+      </table>
+    </div>
+    <div>
+      <h2>Riesgos y mitigaciones</h2>
+      <div class="card"><b>Inequidad territorial.</b> Las estaciones nuevas (zonas de expansión) tienen 65 % más error; menos flota ahí reforzaría su bajo uso. → Revisión manual y segmento "nueva" como criterio para aceptar un challenger.</div>
+      <div class="card"><b>Ciclo de retroalimentación en P2.</b> El rebalanceo cambia los flujos con que se reentrena. → Registrar intervenciones.</div>
+      <div class="card"><b>Eventos atípicos</b> (Mundial 2026 en Guadalajara). → Monitoreo de drift y criterio del operador.</div>
+    </div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>12</span></div>
+</section>
+
+<!-- 13. Decisiones -->
+<section class="s">
+  <p class="k">Decisiones de MLOps</p>
+  <h1>Lo que decidimos y por qué</h1>
+  <table>
+    <tr><th style="width:30%">Decisión</th><th>Por qué</th></tr>
+    <tr><td>Partición temporal y lags con shift ≥ horizonte</td><td>Un split aleatorio filtraría el futuro y sobrestimaría el desempeño; está probado en <code>tests/</code>.</td></tr>
+    <tr><td>Registry como fuente de verdad (imagen sin modelos)</td><td>Promover o revertir es mover un alias; el código y el modelo se versionan por separado.</td></tr>
+    <tr><td>Promoción explícita después del A/B</td><td>El reentrenamiento es automático de punta a punta, pero una persona aprueba qué llega a producción.</td></tr>
+    <tr><td>Drift contra dos referencias</td><td>Comparar con la misma temporada separa el cambio estructural de la estacionalidad.</td></tr>
+    <tr><td>Estabilidad sobre silueta en P3</td><td>Un grupo que cambia cada trimestre no sirve para planear.</td></tr>
+    <tr><td>Prueba del sistema con Compose en CI</td><td>Los errores de integración (red, rutas de artefactos, versiones de MLflow) aparecen antes de llegar a main.</td></tr>
+    <tr><td>Capacidad medida antes de dimensionar</td><td>Locust mostró que la CPU, no la memoria, limita; de ahí 2 workers y una instancia más chica.</td></tr>
+  </table>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>13</span></div>
+</section>
+
+<!-- 14. Demo y cierre -->
+<section class="s">
+  <p class="k">Demo y cierre</p>
+  <h1>Pruébalo: tres comandos</h1>
+  <div class="cols">
+    <div>
+      <div class="card" style="font-family:Consolas,monospace;font-size:14pt;line-height:1.6">
+        git clone github.com/diegofalconcostilla/TC5061-Proyecto-Equipo34<br>
+        docker compose up -d --build --wait<br>
+        curl -X POST localhost:8000/predict/p1 \<br>
+        &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
+        &nbsp;&nbsp;-d @examples/api/p1.json
+      </div>
+      <p>Respuesta: <code>"version": "1", "source": "registry"</code>, 54.6 y 49.3 viajes esperados (reales: 56 y 43). Swagger en <code>localhost:8000/docs</code>.</p>
+    </div>
+    <div>
+      <h2>Entregables</h2>
+      <ul>
+        <li>Repositorio: <b>github.com/diegofalconcostilla/TC5061-Proyecto-Equipo34</b></li>
+        <li>README con reproducción, API, CI/CD, carga, FinOps, drift y A/B</li>
+        <li><code>MODEL_CARD.md</code></li>
+        <li>Video: <code>TC5061_Proyecto_Final_Equipo34.mp4</code> (2-5 min)</li>
+      </ul>
+      <h2 style="margin-top:14pt">Siguiente paso</h2>
+      <p>Programar el monitoreo y el reentrenamiento (hoy se corren a mano) y calcular features en línea desde los viajes.</p>
+    </div>
+  </div>
+  <div class="foot"><span>TC5061 · Equipo 34</span><span>14</span></div>
+</section>
+
+</body>
+</html>

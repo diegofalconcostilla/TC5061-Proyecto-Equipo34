@@ -4,7 +4,26 @@
     <img src="https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter" />
 </a>
 
-Propuesta de solución de Machine Learning para la operación de **MiBici**, el sistema de bicicleta pública del Área Metropolitana de Guadalajara. El repositorio tiene la ingesta reproducible y versionada de los viajes, el módulo de feature engineering, un MLflow Project que reproduce los experimentos de las tres preguntas, el Model Registry con el modelo `champion` de cada una y su operación: una API REST en contenedor, el sistema completo con Docker Compose, CI/CD con GitHub Actions, monitoreo de drift con A/B testing y pruebas de carga con Locust. Es el proyecto integrador de TC5061.
+Propuesta de solución de Machine Learning para la operación de **MiBici**, el sistema de bicicleta pública del Área Metropolitana de Guadalajara. El repositorio tiene la ingesta reproducible y versionada de los viajes, el módulo de feature engineering, un MLflow Project que reproduce los experimentos de las tres preguntas, el Model Registry con el modelo `champion` de cada una y su operación: una API REST en contenedor, el sistema completo con Docker Compose, CI/CD con GitHub Actions, monitoreo de drift con A/B testing, pruebas de carga con Locust, análisis FinOps y la [Model Card](MODEL_CARD.md). Es el proyecto integrador de TC5061.
+
+## Entrega final
+
+| Entregable | Dónde |
+|---|---|
+| Presentación | [`docs/TC5061_Proyecto_Final_Equipo34.pdf`](docs/TC5061_Proyecto_Final_Equipo34.pdf) (fuente: [`docs/presentacion/presentacion.html`](docs/presentacion/presentacion.html)) |
+| Model Card | [`MODEL_CARD.md`](MODEL_CARD.md): uso previsto, datos, métricas por segmento, monitoreo, ciclo de reentrenamiento y riesgos éticos |
+| Guion del video y checklist | [`docs/guion_video.md`](docs/guion_video.md) |
+| Video (2-5 min) | `TC5061_Proyecto_Final_Equipo34.mp4`, subido a Canvas |
+
+Cómo se cubre cada criterio de la rúbrica:
+
+| Criterio | Evidencia en el repositorio |
+|---|---|
+| Estructura y experimentación | Plantilla Cookiecutter, [feature engineering](mibici/features.py), [MLflow Project](MLproject) y [Tracking](#qué-registra-cada-run) con 64 runs reproducibles |
+| Modelo y Registry | [Model Registry](#model-registry) con aliases `@champion`/`@challenger`, etiquetas de linaje y [estado de producción](MODEL_CARD.md#6-ciclo-de-reentrenamiento-y-ab-testing-p1) |
+| Despliegue y operación | [API FastAPI en contenedor](#api-rest-con-fastapi-y-podman), [Docker Compose](#sistema-completo-con-docker-compose), [CI/CD](#cicd-con-github-actions) y [Locust](#pruebas-de-carga-con-locust) |
+| Monitoreo, gobernanza y FinOps | [Drift con Evidently y A/B testing](#análisis-de-ab-testing-y-monitoreo-de-data-drift-p1), [FinOps](#análisis-finops-costo-por-inferencia) y [Model Card](MODEL_CARD.md) |
+| Valor agregado: Continuous Training | Drift → `mlflow run . -e retrain` → v3 `@challenger` → `mlflow run . -e abtest` → promoción con `python -m mibici.modeling.abtest --promote` |
 
 ## Preguntas del proyecto
 
@@ -42,6 +61,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 ├── Makefile               <- make mlflow-server | ingest | train | search | register | all | abtest | test | validate | security | api-build | api-run | compose-up | compose-down | load-test | load-report
 ├── Containerfile          <- imagen OCI de la API (podman build o docker build)
 ├── README.md
+├── MODEL_CARD.md          <- ficha de los modelos en producción (uso, métricas por segmento, riesgos)
 ├── requirements.txt       <- dependencias con versión fija
 ├── requirements-api.txt   <- dependencias de la imagen de la API (mismas versiones)
 ├── pyproject.toml         <- metadatos del paquete mibici y configuración de ruff
@@ -50,7 +70,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   ├── raw/               <- CSV originales del portal (no versionado)
 │   ├── interim/           <- Parquet limpio por mes y estaciones (no versionado)
 │   └── processed/         <- datasets de P1, P2 y P3 (no versionado)
-├── docs/                  <- propuesta (entrega 1) y reporte de MLflow (entrega 2) en PDF
+├── docs/                  <- reportes de entregas anteriores, presentación final (PDF y fuente) y guion del video
 ├── examples/api/          <- peticiones de ejemplo para la API (registros reales de test)
 ├── load
 │   ├── locustfile.py      <- escenario de tráfico de Locust (P1, P2, P3, tablero y petición inválida)
@@ -69,6 +89,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   ├── TC5061_Operacion_FinOps_Equipo34.pdf <- reporte de operación: carga y análisis FinOps (entrega 7)
 │   ├── carga/             <- resultados de Locust y docker stats por escenario, y resultados.md
 │   ├── monitoreo/         <- reportes de drift de Evidently y resultado del A/B de P1
+│   ├── analisis_monitoreo_p1/ <- interpretación del drift y del A/B de P1 con su evidencia
 │   ├── seguridad/         <- salida de bandit, pip-audit y la revisión del historial
 │   ├── deepchecks/        <- reportes HTML de make validate (no versionado)
 │   └── figures/           <- capturas de MLflow, DeepChecks, pruebas, seguridad y la API
@@ -399,6 +420,7 @@ python -m pytest tests -v    # con el nombre de cada prueba
 | `test_api.py` | Endpoints REST, esquemas de P1, P2 y P3, validación de entradas y salidas, carga desde el registry por alias o desde una copia local | Variables faltantes, de más o fuera de rango; perfil de P3 que no suma 1; salida inválida del modelo; registros vacíos; MLflow no disponible |
 | `test_reproducibility.py` | **Reproducibilidad:** entrenar dos veces con `SEED` da las mismas predicciones | HGB y random forest de P1 y P2, MiniBatchKMeans y mezcla de gaussianas de P3; control: con otros datos el modelo sí cambia |
 | `test_validation.py` | Las suites de DeepChecks detectan nulos, duplicados, columnas constantes y drift | Columna constante conocida (excepción declarada) contra una nueva |
+| `test_abtest.py` | A/B de P1: periodo de evaluación, estaciones nuevas, bootstrap pareado, decisión, segmentos y reporte | Challenger peor (se rechaza); versiones idénticas (se queda el champion) |
 | `test_load_report.py` | Lectura de `docker stats`/`podman stats`, resumen de los CSV de Locust, escalones del estrés y capacidad con el SLO | Unidades de memoria de Docker (MiB) y Podman (MB); segundos de transición entre escalones y fila final de Locust; ningún escalón dentro del SLO |
 
 **Reproducibilidad.** Las pruebas llaman a las funciones de entrenamiento del proyecto (`p1_hgb`, `p2_random_forest`, `p3_minibatch_kmeans`, etc.), no solo a scikit-learn, con tablas sintéticas que tienen las mismas columnas que los datasets reales. Todos los modelos usan `random_state=SEED` (`SEED = 42` en `config.py`). Los random forest entrenan árboles idénticos, pero con `n_jobs=-1` suman las predicciones de los árboles en paralelo y el orden de la suma cambia los últimos bits (diferencias de 1e-15), así que las predicciones se comparan con una tolerancia de 1e-12 y no bit a bit.
