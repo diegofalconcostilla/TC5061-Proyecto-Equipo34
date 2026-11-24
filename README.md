@@ -12,7 +12,6 @@ Propuesta de solución de Machine Learning para la operación de **MiBici**, el 
 |---|---|
 | Presentación | [`docs/TC5061_Proyecto_Final_Equipo34.pdf`](docs/TC5061_Proyecto_Final_Equipo34.pdf) (fuente: [`docs/presentacion/presentacion.html`](docs/presentacion/presentacion.html)) |
 | Model Card | [`MODEL_CARD.md`](MODEL_CARD.md): uso previsto, datos, métricas por segmento, monitoreo, ciclo de reentrenamiento y riesgos éticos |
-| Guion del video y checklist | [`docs/guion_video.md`](docs/guion_video.md) |
 | Video (2-5 min) | `TC5061_Proyecto_Final_Equipo34.mp4`, subido a Canvas |
 
 Cómo se cubre cada criterio de la rúbrica:
@@ -70,7 +69,7 @@ Datos personales: la ingesta elimina `Usuario_Id`, `Genero` y `Año_de_nacimient
 │   ├── raw/               <- CSV originales del portal (no versionado)
 │   ├── interim/           <- Parquet limpio por mes y estaciones (no versionado)
 │   └── processed/         <- datasets de P1, P2 y P3 (no versionado)
-├── docs/                  <- reportes de entregas anteriores, presentación final (PDF y fuente) y guion del video
+├── docs/                  <- reportes de entregas anteriores, y presentación final (PDF y fuente)
 ├── examples/api/          <- peticiones de ejemplo para la API (registros reales de test)
 ├── load
 │   ├── locustfile.py      <- escenario de tráfico de Locust (P1, P2, P3, tablero y petición inválida)
